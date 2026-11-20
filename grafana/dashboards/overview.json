@@ -292,7 +292,7 @@
   },
   {
    "type": "stat",
-   "title": "Load (5 min) / cores",
+   "title": "Load / cores",
    "description": "",
    "targets": [
     {
@@ -357,7 +357,7 @@
   },
   {
    "type": "stat",
-   "title": "OOM kills (24 h)",
+   "title": "OOM kills 24h",
    "description": "",
    "targets": [
     {
@@ -922,7 +922,7 @@
      "format": "table"
     },
     {
-     "expr": "project:probe_success:avg7d",
+     "expr": "max by (project) (project:probe_success:avg7d)",
      "legendFormat": "__auto",
      "refId": "B",
      "datasource": {
@@ -934,7 +934,7 @@
      "format": "table"
     },
     {
-     "expr": "project:cpu_cores:rate2m",
+     "expr": "max by (project) (avg_over_time(project:cpu_cores:rate2m[24h]))",
      "legendFormat": "__auto",
      "refId": "C",
      "datasource": {
@@ -946,7 +946,7 @@
      "format": "table"
     },
     {
-     "expr": "avg_over_time(project:cpu_cores:rate2m[24h])",
+     "expr": "max by (project) (project:memory_working_set_bytes)",
      "legendFormat": "__auto",
      "refId": "D",
      "datasource": {
@@ -958,7 +958,7 @@
      "format": "table"
     },
     {
-     "expr": "project:memory_working_set_bytes",
+     "expr": "sum by (project) (sm_project_disk_bytes)",
      "legendFormat": "__auto",
      "refId": "E",
      "datasource": {
@@ -970,7 +970,7 @@
      "format": "table"
     },
     {
-     "expr": "sum by (project) (sm_project_disk_bytes)",
+     "expr": "max by (project) (sm_http_unique_clients_window{class=\"engaged\",window=\"7d\"})",
      "legendFormat": "__auto",
      "refId": "F",
      "datasource": {
@@ -982,7 +982,7 @@
      "format": "table"
     },
     {
-     "expr": "sm_http_unique_clients_window{class=\"engaged\",window=\"7d\"}",
+     "expr": "sum by (project) (sm_http_requests_window{class=~\"ai_bot|bot\",window=\"24h\"})",
      "legendFormat": "__auto",
      "refId": "G",
      "datasource": {
@@ -994,7 +994,7 @@
      "format": "table"
     },
     {
-     "expr": "sum by (project) (sm_http_requests_window{class=~\"ai_bot|bot\",window=\"24h\"})",
+     "expr": "max by (project) (sm_project_idle_seconds)",
      "legendFormat": "__auto",
      "refId": "H",
      "datasource": {
@@ -1006,7 +1006,7 @@
      "format": "table"
     },
     {
-     "expr": "sm_project_idle_seconds",
+     "expr": "max by (project) (sm_project_containers{state=\"stopped\"})",
      "legendFormat": "__auto",
      "refId": "I",
      "datasource": {
@@ -1018,7 +1018,7 @@
      "format": "table"
     },
     {
-     "expr": "sum by (project) (sm_project_containers{state=\"stopped\"})",
+     "expr": "max by (project) (sm_project_parked * 2 + sm_project_park_candidate)",
      "legendFormat": "__auto",
      "refId": "J",
      "datasource": {
@@ -1030,33 +1030,9 @@
      "format": "table"
     },
     {
-     "expr": "sm_project_park_candidate",
+     "expr": "max by (project) (project:tls_expiry_days)",
      "legendFormat": "__auto",
      "refId": "K",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "instant": true,
-     "range": false,
-     "format": "table"
-    },
-    {
-     "expr": "sm_project_parked",
-     "legendFormat": "__auto",
-     "refId": "L",
-     "datasource": {
-      "type": "prometheus",
-      "uid": "prometheus"
-     },
-     "instant": true,
-     "range": false,
-     "format": "table"
-    },
-    {
-     "expr": "project:tls_expiry_days",
-     "legendFormat": "__auto",
-     "refId": "M",
      "datasource": {
       "type": "prometheus",
       "uid": "prometheus"
@@ -1084,17 +1060,15 @@
        "project": "Project",
        "Value #A": "Site",
        "Value #B": "Uptime 7d",
-       "Value #C": "CPU now",
-       "Value #D": "CPU 24h avg",
-       "Value #E": "RAM",
-       "Value #F": "Disk",
-       "Value #G": "Visitors 7d",
-       "Value #H": "Bot req 24h",
-       "Value #I": "Idle",
-       "Value #J": "Stopped ctrs",
-       "Value #K": "Park?",
-       "Value #L": "Parked",
-       "Value #M": "TLS days"
+       "Value #C": "CPU 24h avg",
+       "Value #D": "RAM",
+       "Value #E": "Disk",
+       "Value #F": "Visitors 7d",
+       "Value #G": "Bot req 24h",
+       "Value #H": "Idle",
+       "Value #I": "Stopped ctrs",
+       "Value #J": "Status",
+       "Value #K": "TLS days"
       },
       "indexByName": {
        "project": 0,
@@ -1108,9 +1082,7 @@
        "Value #H": 8,
        "Value #I": 9,
        "Value #J": 10,
-       "Value #K": 11,
-       "Value #L": 12,
-       "Value #M": 13
+       "Value #K": 11
       }
      }
     },
@@ -1130,10 +1102,23 @@
     "defaults": {
      "custom": {
       "align": "auto",
-      "filterable": false
+      "filterable": false,
+      "width": 118
      }
     },
     "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Project"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 200
+       }
+      ]
+     },
      {
       "matcher": {
        "id": "byName",
@@ -1196,48 +1181,6 @@
           {
            "value": 0.99,
            "color": "green"
-          }
-         ]
-        }
-       },
-       {
-        "id": "custom.cellOptions",
-        "value": {
-         "type": "color-text"
-        }
-       },
-       {
-        "id": "decimals",
-        "value": 2
-       }
-      ]
-     },
-     {
-      "matcher": {
-       "id": "byName",
-       "options": "CPU now"
-      },
-      "properties": [
-       {
-        "id": "unit",
-        "value": "short"
-       },
-       {
-        "id": "thresholds",
-        "value": {
-         "mode": "absolute",
-         "steps": [
-          {
-           "value": null,
-           "color": "text"
-          },
-          {
-           "value": 0.25,
-           "color": "orange"
-          },
-          {
-           "value": 1,
-           "color": "red"
           }
          ]
         }
@@ -1467,7 +1410,7 @@
      {
       "matcher": {
        "id": "byName",
-       "options": "Park?"
+       "options": "Status"
       },
       "properties": [
        {
@@ -1476,13 +1419,21 @@
          {
           "type": "value",
           "options": {
+           "0": {
+            "text": "active",
+            "color": "green"
+           },
            "1": {
-            "text": "YES",
+            "text": "idle: park?",
             "color": "orange"
            },
-           "0": {
-            "text": "no",
-            "color": "text"
+           "2": {
+            "text": "parked",
+            "color": "blue"
+           },
+           "3": {
+            "text": "parked",
+            "color": "blue"
            }
           }
          }
@@ -1493,32 +1444,6 @@
         "value": {
          "type": "color-text"
         }
-       }
-      ]
-     },
-     {
-      "matcher": {
-       "id": "byName",
-       "options": "Parked"
-      },
-      "properties": [
-       {
-        "id": "mappings",
-        "value": [
-         {
-          "type": "value",
-          "options": {
-           "1": {
-            "text": "parked",
-            "color": "blue"
-           },
-           "0": {
-            "text": "",
-            "color": "text"
-           }
-          }
-         }
-        ]
        }
       ]
      },
@@ -1744,7 +1669,8 @@
        "state": true,
        "health": true,
        "image": true,
-       "signal": true
+       "signal": true,
+       "code": true
       },
       "renameByName": {
        "alertname": "Alert",
@@ -1773,6 +1699,42 @@
      }
     },
     "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Alert"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 170
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Severity"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 75
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Project"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 150
+       }
+      ]
+     },
      {
       "matcher": {
        "id": "byName",

@@ -69,7 +69,7 @@ class Out:
             return
         f = self.fam.setdefault(name, (help_, typ, []))
         lab = ",".join(f'{k}="{esc(v)}"' for k, v in (labels or {}).items())
-        f[2].append(f"{name}{{{lab}}} {float(value):.6g}" if lab else f"{name} {float(value):.6g}")
+        f[2].append(f"{name}{{{lab}}} {float(value)!r}" if lab else f"{name} {float(value)!r}")
 
     def render(self) -> str:
         lines = []
@@ -201,11 +201,9 @@ def container_activity(state, projects, cons):
             continue
         a = ev.get("Actor", {}).get("Attributes", {})
         proj = a.get("com.docker.compose.project") or ""
-        if not proj:
+        if not proj:  # plain `docker run`: attribute by container name only (images are shared as tool runners)
             name = a.get("name", "")
-            img = a.get("image", "")
-            proj = next((p for p, cfg in projects.items()
-                         if name.startswith(p) or any(img.startswith(i) for i in cfg["images"])), "")
+            proj = next((p for p in projects if name.startswith(p)), "")
         if proj:
             last[proj] = max(last.get(proj, 0), ev.get("time", 0))
     state["events_since"] = until

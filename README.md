@@ -71,5 +71,5 @@ python3 collector/collect.py --full     # force the slow (disk/git/image) scan n
 Adding a project: add a `[projects.<compose-project-name>]` block to `config/projects.toml`
 (and its unit names to the node-exporter `--collector.systemd.unit-include` regex).
 
-Footprint: ~450 MB RAM limit in total (prometheus 512m, grafana 320m, cadvisor 256m, node 96m,
+Footprint: limits add up to ~1.4 GB, real use is ~400 MB (prometheus 512m, grafana 512m, cadvisor 256m, node 96m,
 blackbox 64m; typical use is well below), TSDB capped at 90 days / 2 GB.

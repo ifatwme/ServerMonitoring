@@ -121,7 +121,7 @@ def col(name, unit=None, th=None, mappings=None, cell=None, width=None, decimals
     return {"matcher": {"id": "byName", "options": name}, "properties": props}
 
 
-def table(title, queries, rename, overrides=None, desc="", sort=None, hide=None, join="merge"):
+def table(title, queries, rename, overrides=None, desc="", sort=None, hide=None, join="merge", width=None):
     """queries: list of (refId, expr). Instant table queries merged on their common labels."""
     exclude = {"Time": True, "__name__": True, "job": True, "instance": True, **{h: True for h in (hide or [])}}
     tr = [{"id": join, "options": {}} if join == "merge" else {"id": "joinByField", "options": {"byField": join, "mode": "outer"}},
@@ -132,7 +132,8 @@ def table(title, queries, rename, overrides=None, desc="", sort=None, hide=None,
     return {"type": "table", "title": title, "description": desc,
             "targets": [tgt(e, ref=r, instant=True, table=True) for r, e in queries],
             "transformations": tr,
-            "fieldConfig": {"defaults": {"custom": {"align": "auto", "filterable": False}}, "overrides": overrides or []},
+            "fieldConfig": {"defaults": {"custom": {"align": "auto", "filterable": False, **({"width": width} if width else {})}},
+                            "overrides": overrides or []},
             "options": {"showHeader": True, "cellHeight": "sm", "footer": {"show": False}}}
 
 
@@ -157,9 +158,9 @@ def overview():
                thresholds((None, "red"), (0.8e9, "orange"), (1.5e9, "green"))), 3, 4)
     b.add(stat("Disk / used", '1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}',
                "percentunit", thresholds((None, "green"), (0.8, "orange"), (0.9, "red")), decimals=0), 3, 4)
-    b.add(stat("Load (5 min) / cores", 'node_load5 / scalar(count(node_cpu_seconds_total{mode="idle"}))', "percentunit",
+    b.add(stat("Load / cores", 'node_load5 / scalar(count(node_cpu_seconds_total{mode="idle"}))', "percentunit",
                thresholds((None, "green"), (0.8, "orange"), (1.2, "red")), decimals=0), 3, 4)
-    b.add(stat("OOM kills (24 h)", "increase(node_vmstat_oom_kill[24h])", "short",
+    b.add(stat("OOM kills 24h", "increase(node_vmstat_oom_kill[24h])", "short",
                thresholds((None, "green"), (1, "red")), decimals=0), 3, 4)
     b.add(stat("Sites up", 'sum(probe_success{job="uptime"}) / count(probe_success{job="uptime"})', "percentunit",
                thresholds((None, "red"), (0.99, "green")), decimals=0), 3, 4)
@@ -189,27 +190,24 @@ def overview():
     ], "Bps"), 8, 8)
 
     b.row("Projects")
+    M = lambda e: f"max by (project) ({e})"
     b.add(table("Projects at a glance", [
-        ("A", f'max by (project) (probe_success{{job="uptime"}})'),
-        ("B", "project:probe_success:avg7d"),
-        ("C", "project:cpu_cores:rate2m"),
-        ("D", "avg_over_time(project:cpu_cores:rate2m[24h])"),
-        ("E", "project:memory_working_set_bytes"),
-        ("F", "sum by (project) (sm_project_disk_bytes)"),
-        ("G", 'sm_http_unique_clients_window{class="engaged",window="7d"}'),
-        ("H", 'sum by (project) (sm_http_requests_window{class=~"ai_bot|bot",window="24h"})'),
-        ("I", "sm_project_idle_seconds"),
-        ("J", 'sum by (project) (sm_project_containers{state="stopped"})'),
-        ("K", "sm_project_park_candidate"),
-        ("L", "sm_project_parked"),
-        ("M", "project:tls_expiry_days"),
-    ], {"project": "Project", "Value #A": "Site", "Value #B": "Uptime 7d", "Value #C": "CPU now",
-        "Value #D": "CPU 24h avg", "Value #E": "RAM", "Value #F": "Disk", "Value #G": "Visitors 7d",
-        "Value #H": "Bot req 24h", "Value #I": "Idle", "Value #J": "Stopped ctrs", "Value #K": "Park?",
-        "Value #L": "Parked", "Value #M": "TLS days"},
-        [col("Site", mappings=UPDOWN, cell="color-background", width=70),
+        ("A", M('probe_success{job="uptime"}')),
+        ("B", M("project:probe_success:avg7d")),
+        ("C", M("avg_over_time(project:cpu_cores:rate2m[24h])")),
+        ("D", M("project:memory_working_set_bytes")),
+        ("E", "sum by (project) (sm_project_disk_bytes)"),
+        ("F", M('sm_http_unique_clients_window{class="engaged",window="7d"}')),
+        ("G", 'sum by (project) (sm_http_requests_window{class=~"ai_bot|bot",window="24h"})'),
+        ("H", M("sm_project_idle_seconds")),
+        ("I", M('sm_project_containers{state="stopped"}')),
+        ("J", M("sm_project_parked * 2 + sm_project_park_candidate")),
+        ("K", M("project:tls_expiry_days")),
+    ], {"project": "Project", "Value #A": "Site", "Value #B": "Uptime 7d", "Value #C": "CPU 24h avg",
+        "Value #D": "RAM", "Value #E": "Disk", "Value #F": "Visitors 7d", "Value #G": "Bot req 24h",
+        "Value #H": "Idle", "Value #I": "Stopped ctrs", "Value #J": "Status", "Value #K": "TLS days"},
+        [col("Project", width=200), col("Site", mappings=UPDOWN, cell="color-background", width=70),
          col("Uptime 7d", "percentunit", PCT_TH, cell="color-text", decimals=2),
-         col("CPU now", "short", thresholds((None, "text"), (0.25, "orange"), (1, "red")), cell="color-text", decimals=2),
          col("CPU 24h avg", "short", thresholds((None, "text"), (0.25, "orange"), (1, "red")), cell="color-text", decimals=2),
          col("RAM", "bytes", thresholds((None, "text"), (5e8, "orange"), (2e9, "red")), cell="color-text"),
          col("Disk", "bytes"),
@@ -217,23 +215,26 @@ def overview():
          col("Bot req 24h", decimals=0, th=thresholds((None, "text"), (5000, "orange")), cell="color-text"),
          col("Idle", "s", thresholds((None, "text"), (3 * 86400, "orange"), (7 * 86400, "red")), cell="color-text"),
          col("Stopped ctrs", decimals=0, th=thresholds((None, "text"), (1, "red")), cell="color-text"),
-         col("Park?", mappings=YESNO_BAD, cell="color-text"),
-         col("Parked", mappings=[{"type": "value", "options": {"1": {"text": "parked", "color": "blue"},
-                                                                 "0": {"text": "", "color": "text"}}}]),
+         col("Status", mappings=[{"type": "value", "options": {"0": {"text": "active", "color": "green"},
+                                                                 "1": {"text": "idle: park?", "color": "orange"},
+                                                                 "2": {"text": "parked", "color": "blue"},
+                                                                 "3": {"text": "parked", "color": "blue"}}}],
+             cell="color-text"),
          col("TLS days", decimals=0, th=thresholds((None, "red"), (14, "orange"), (30, "green")), cell="color-text")],
         desc="Visitors = distinct IPs that loaded a page AND its assets (real browsers). Idle = time since the newest "
              "of: engaged visit, commit, uncommitted edit, image build, container start (tests).",
-        sort=("RAM", True)), 24, 10)
+        sort=("RAM", True), width=118), 24, 10)
     b.add(bargauge("RAM share", "project:memory_share", "percentunit", max_=1), 8, 8)
     b.add(bargauge("CPU share (24 h avg)", "avg_over_time(project:cpu_cores:rate2m[24h]) / scalar(sum(avg_over_time(project:cpu_cores:rate2m[24h])))",
                    "percentunit", max_=1), 8, 8)
     b.add(table("Firing alerts", [("A", 'ALERTS{alertstate="firing"}')],
                 {"alertname": "Alert", "severity": "Severity", "project": "Project", "container": "Container",
                  "unit": "Unit", "name": "Name"},
-                [col("Severity", mappings=[{"type": "value", "options": {
+                [col("Alert", width=170), col("Severity", width=75), col("Project", width=150),
+                 col("Severity", mappings=[{"type": "value", "options": {
                     "critical": {"color": "red"}, "warning": {"color": "orange"}, "info": {"color": "blue"}}}],
                      cell="color-text")],
-                hide=["alertstate", "Value", "url", "kind", "class", "window", "service", "state", "health", "image", "signal"]), 8, 8)
+                hide=["alertstate", "Value", "url", "kind", "class", "window", "service", "state", "health", "image", "signal", "code"]), 8, 8)
 
     b.row("Uptime")
     b.add({"type": "state-timeline", "title": "Public URLs (blackbox probe every 60 s)",
@@ -263,7 +264,7 @@ def project():
                th=thresholds((None, "red"), (1, "green")), color_mode="background"), 3, 4)
     b.add(stat("Uptime (range)", f'avg_over_time(probe_success{{job="uptime",{P}}}[$__range])', "percentunit",
                PCT_TH, decimals=2), 3, 4)
-    b.add(stat("TLS expires in", f'project:tls_expiry_days{{{P}}}', "d",
+    b.add(stat("TLS days left", f'project:tls_expiry_days{{{P}}}', "none",
                thresholds((None, "red"), (14, "orange"), (30, "green")), decimals=0), 3, 4)
     b.add(stat("Containers running", f'sm_project_containers{{{P},state="running"}}', decimals=0), 3, 4)
     b.add(stat("Containers stopped", f'sm_project_containers{{{P},state="stopped"}}',
@@ -276,7 +277,7 @@ def project():
     b.add(table("Last activity", [("A", f'sm_project_last_activity_timestamp_seconds{{{P}}} * 1000')],
                 {"signal": "Signal", "Value": "When"}, [col("When", "dateTimeFromNow")], hide=["project"],
                 desc="commit / edit (uncommitted or dev-dir files) / build (newest project image) / "
-                     "container_start (incl. `compose run` tests) / human_visit (engaged browser)"), 6, 7)
+                     "container_start (incl. `compose run` tests) / human_visit (engaged browser)"), 5, 9)
     b.add(table("Containers", [
         ("A", f'sm_container_info{{{P}}}'), ("B", f'sm_container_restart_count{{{P}}}'),
         ("C", f'(time() - sm_container_started_timestamp_seconds{{{P}}}) * sm_container_up{{{P}}}'),
@@ -288,7 +289,7 @@ def project():
          col("Health", mappings=[{"type": "value", "options": {"healthy": {"color": "green"}, "unhealthy": {"color": "red"},
                                                                 "none": {"color": "text"}}}], cell="color-text"),
          col("Up for", "s"), col("Mem limit", "bytes"), col("Last exit OOM", mappings=YESNO_BAD)],
-        hide=["project", "container", "Value #A"], join="service"), 12, 7)
+        hide=["project", "container", "Value #A"], join="service"), 10, 9)
     b.add(table("Jobs / units", [
         ("A", f'sm_unit_last_success{{{P}}}'), ("B", f'sm_unit_last_start_timestamp_seconds{{{P}}} * 1000'),
         ("C", f'sm_unit_last_duration_seconds{{{P}}}'), ("D", f'sm_unit_enabled{{{P}}}')],
@@ -297,7 +298,7 @@ def project():
                                                                   "0": {"text": "FAILED", "color": "red"}}}], cell="color-text"),
          col("Started", "dateTimeFromNow"), col("Took", "s"),
          col("Enabled", mappings=[{"type": "value", "options": {"1": {"text": "yes"}, "0": {"text": "no"}}}])],
-        hide=["project"], join="unit"), 6, 7)
+        hide=["project"], join="unit"), 9, 9)
 
     b.row("Resources")
     b.add(ts("CPU per service (cores)", [tgt(f'service:cpu_cores:rate2m{{{P}}}', "{{service}}")], "short", stack=True), 12, 8)
@@ -319,13 +320,14 @@ def project():
     b.add(bargauge("Disk", f'sm_project_disk_bytes{{{P}}}', "bytes", "{{kind}}",
                    desc="repo = deployed dir (incl. data), dev = dev/archive dirs, images = project images "
                         "(shared layers counted per image), volumes = docker volumes"), 8, 6)
-    b.add(table("Images", [("A", f'sm_docker_image_bytes{{{P}}}'), ("B", f'sm_docker_image_created_timestamp_seconds{{{P}}} * 1000')],
+    b.add(table("Images", [("A", f'max by (image, in_use) (sm_docker_image_bytes{{{P}}})'),
+                           ("B", f'max by (image, in_use) (sm_docker_image_created_timestamp_seconds{{{P}}} * 1000 * on (image) group_left (in_use) (0 * sm_docker_image_bytes{{{P}}} + 1))')],
                 {"image": "Image", "in_use": "In use", "Value #A": "Size", "Value #B": "Built"},
                 [col("Size", "bytes"), col("Built", "dateTimeFromNow"),
                  col("In use", mappings=[{"type": "value", "options": {"1": {"text": "yes", "color": "green"},
                                                                         "0": {"text": "unused", "color": "orange"}}}],
                      cell="color-text")],
-                hide=["project"], join="image", sort=("Size", True)), 16, 6)
+                sort=("Size", True)), 16, 6)
 
     b.row("Traffic (nginx access log)")
     b.add(ts("Requests/min by client class", [
@@ -375,22 +377,31 @@ def waste():
                    th=thresholds((None, "green"), (600, "orange"), (3600, "red"))), 12, 6)
 
     b.row("Heavy but quiet")
+    LIM = 'max by (project, service, name) (label_replace(sm_container_memory_limit_bytes, "name", "$1", "container", "(.*)"))'
     b.add(table("Containers: memory held vs. CPU used (7 d)", [
-        ("A", "service:memory_working_set_bytes"),
-        ("B", "avg_over_time(service:cpu_cores:rate2m[7d])"),
-        ("C", 'max by (name) (label_replace(sm_container_memory_limit_bytes, "name", "$1", "container", "(.*)"))'),
-        ("D", 'service:memory_working_set_bytes / on (name) group_left max by (name) (label_replace(sm_container_memory_limit_bytes, "name", "$1", "container", "(.*)"))'),
-    ], {"project": "Project", "service": "Service", "name": "Container", "Value #A": "RAM now",
+        ("A", "max by (project, service, name) (service:memory_working_set_bytes)"),
+        ("B", "max by (project, service, name) (avg_over_time(service:cpu_cores:rate2m[7d]))"),
+        ("C", LIM),
+        ("D", f"max by (project, service, name) (service:memory_working_set_bytes) / {LIM}"),
+    ], {"name": "Container", "project": "Project", "Value #A": "RAM now",
         "Value #B": "CPU 7d avg", "Value #C": "Limit", "Value #D": "RAM / limit"},
-        [col("RAM now", "bytes", thresholds((None, "text"), (3e8, "orange"), (1e9, "red")), cell="color-text"),
+        [col("Container", width=230), col("Project", width=150),
+         col("RAM now", "bytes", thresholds((None, "text"), (3e8, "orange"), (1e9, "red")), cell="color-text"),
          col("CPU 7d avg", decimals=3, th=thresholds((None, "text"), (0.1, "orange"), (0.5, "red")), cell="color-text"),
          col("Limit", "bytes"),
          col("RAM / limit", "percentunit", thresholds((None, "green"), (0.8, "orange"), (0.9, "red")), cell="gauge")],
-        join="name", sort=("RAM now", True),
-        desc="Big RAM + ~0 CPU = a loaded model or cache nobody is using. Near 100 % of limit = OOM risk."), 16, 10)
-    b.add(bargauge("Traffic mix, last 24 h (requests)", 'sum by (project, class) (sm_http_requests_window{window="24h",class!="pageview"})',
-                   "short", "{{project}} · {{class}}",
-                   desc="AI crawlers can dominate CPU of dynamic sites; consider robots.txt / rate limits for them."), 8, 10)
+        hide=["service"], sort=("RAM now", True),
+        desc="Big RAM + ~0 CPU = a loaded model or cache nobody is using. Near 100 % of limit = OOM risk."), 14, 10)
+    b.add({"type": "barchart", "title": "Traffic mix, last 24 h (requests)",
+           "description": "AI crawlers can dominate the CPU of dynamic sites; consider robots.txt / rate limits for them.",
+           "targets": [tgt('sum by (project, class) (sm_http_requests_window{window="24h",class!="pageview"})', ref="A",
+                           instant=True, table=True)],
+           "transformations": [{"id": "groupingToMatrix", "options": {"rowField": "project", "columnField": "class",
+                                                                       "valueField": "Value", "emptyValue": "zero"}}],
+           "fieldConfig": {"defaults": {"unit": "short", "custom": {"fillOpacity": 80, "lineWidth": 0}}, "overrides": []},
+           "options": {"orientation": "horizontal", "stacking": "normal", "showValue": "never", "barWidth": 0.7,
+                       "xTickLabelRotation": 0, "legend": {"displayMode": "list", "placement": "bottom", "showLegend": True},
+                       "tooltip": {"mode": "multi"}}}, 10, 10)
     b.add(ts("CPU of each project vs. its real visitors", [
         tgt("project:cpu_cores:rate2m", "{{project}} cpu", "A"),
     ], "short", desc="Compare with the visitor counts on the overview; CPU that does not follow traffic is background work."), 24, 7)
@@ -406,12 +417,11 @@ def waste():
     b.add(stat("Pending apt upgrades", "sm_apt_upgradable_packages", decimals=0,
                th=thresholds((None, "green"), (10, "orange"))), 4, 4)
     b.add(stat("Reboot required", "sm_host_reboot_required", mappings=YESNO_BAD), 4, 4)
-    b.add(table("Images no container uses", [("A", 'sm_docker_image_bytes{in_use="0"}'),
-                                             ("B", 'sm_docker_image_created_timestamp_seconds * 1000')],
+    b.add(table("Images no container uses", [("A", 'max by (image, project) (sm_docker_image_bytes{in_use="0"})'),
+                                             ("B", 'max by (image, project) (sm_docker_image_created_timestamp_seconds * 1000 and on (image) sm_docker_image_bytes{in_use="0"})')],
                 {"image": "Image", "project": "Project", "Value #A": "Size", "Value #B": "Built"},
-                [col("Size", "bytes"), col("Built", "dateTimeFromNow")], hide=["in_use"], join="image",
-                sort=("Size", True), desc="`projctl cleanup` removes them (dry-run first). Rows without a size "
-                                         "are in-use images: ignore."), 12, 10)
+                [col("Image", width=330), col("Size", "bytes"), col("Built", "dateTimeFromNow")],
+                sort=("Size", True), desc="`projctl cleanup` removes them (dry-run first)."), 12, 10)
     b.add(bargauge("Disk per project", "sum by (project) (sm_project_disk_bytes)", "bytes"), 12, 10)
     b.add(ts("Root filesystem free", [tgt('node_filesystem_avail_bytes{mountpoint="/"}', "free"),
                                       tgt('predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[24h], 7*86400)', "in 7 days (trend)", "B")],

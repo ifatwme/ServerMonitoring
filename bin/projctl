@@ -50,8 +50,8 @@ def run(cmd: list[str], doit: bool, cwd: str | None = None) -> bool:
     return r.returncode == 0
 
 
-def sh(*cmd: str) -> str:
-    return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+def sh(*cmd: str, cwd: str | None = None) -> str:
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd).stdout.strip()
 
 
 def prom(q: str) -> dict[str, float]:
@@ -68,6 +68,10 @@ def load():
     st = json.loads((STATE_DIR / "state.json").read_text()) if (STATE_DIR / "state.json").exists() else {}
     parked = json.loads(PARKED.read_text()) if PARKED.exists() else {}
     return cfg.get("projects", {}), st, parked
+
+
+def has_compose(d: str) -> bool:
+    return bool(d) and any(Path(d, f).exists() for f in ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"))
 
 
 def human(n: float) -> str:
@@ -166,7 +170,7 @@ def cmd_park(a):
         rec["timers"][t] = sh("systemctl", "is-enabled", t) == "enabled"
         run(["systemctl", "disable", "--now", t], a.yes)
     # make sure every container of the compose project is down even if the unit's ExecStop didn't do it
-    if Path(c["dir"], "docker-compose.yml").exists() or Path(c["dir"], "compose.yml").exists():
+    if has_compose(c["dir"]):
         run(["docker", "compose", "stop"], a.yes, cwd=c["dir"])
     if a.yes and ok:
         parked[p] = rec
@@ -204,13 +208,18 @@ def cmd_cleanup(a):
     imgs = st.get("slow", {}).get("images", [])
     unused = sorted({i["id"]: i for i in imgs if not i["in_use"]}.values(), key=lambda i: -i["size"])
     keep = set(a.keep or [])
+    # never remove images a registered project's compose file pulls/builds (a parked project needs them back)
+    projects, _, _ = load()
+    for c in projects.values():
+        if has_compose(c.get("dir", "")):
+            keep.update(l.strip().split("@")[0] for l in sh("docker", "compose", "config", "--images", cwd=c["dir"]).splitlines() if l.strip())
     print("Build cache:")
     run(["docker", "builder", "prune", "-af"], a.yes)
     print("Images no container uses (layers shared with used images are not freed):")
     for i in unused:
         refs = [x["ref"] for x in imgs if x["id"] == i["id"]]
-        if any(r.split(":")[0] in keep or r in keep for r in refs):
-            print(f"  keep {', '.join(refs)}")
+        if any(r.split(":")[0] in keep or r in keep or r.removeprefix("docker.io/") in keep for r in refs):
+            print(f"  keep {', '.join(refs)}  (used by a compose file or --keep)")
             continue
         print(f"  {human(i['size']):>7}  {', '.join(refs)}  (project {i['project']}, built {ago(i['created'])} ago)")
         run(["docker", "image", "rm", *refs], a.yes)

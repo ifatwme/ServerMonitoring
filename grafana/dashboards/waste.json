@@ -281,7 +281,7 @@
    "description": "Big RAM + ~0 CPU = a loaded model or cache nobody is using. Near 100 % of limit = OOM risk.",
    "targets": [
     {
-     "expr": "service:memory_working_set_bytes",
+     "expr": "max by (project, service, name) (service:memory_working_set_bytes)",
      "legendFormat": "__auto",
      "refId": "A",
      "datasource": {
@@ -293,7 +293,7 @@
      "format": "table"
     },
     {
-     "expr": "avg_over_time(service:cpu_cores:rate2m[7d])",
+     "expr": "max by (project, service, name) (avg_over_time(service:cpu_cores:rate2m[7d]))",
      "legendFormat": "__auto",
      "refId": "B",
      "datasource": {
@@ -305,7 +305,7 @@
      "format": "table"
     },
     {
-     "expr": "max by (name) (label_replace(sm_container_memory_limit_bytes, \"name\", \"$1\", \"container\", \"(.*)\"))",
+     "expr": "max by (project, service, name) (label_replace(sm_container_memory_limit_bytes, \"name\", \"$1\", \"container\", \"(.*)\"))",
      "legendFormat": "__auto",
      "refId": "C",
      "datasource": {
@@ -317,7 +317,7 @@
      "format": "table"
     },
     {
-     "expr": "service:memory_working_set_bytes / on (name) group_left max by (name) (label_replace(sm_container_memory_limit_bytes, \"name\", \"$1\", \"container\", \"(.*)\"))",
+     "expr": "max by (project, service, name) (service:memory_working_set_bytes) / max by (project, service, name) (label_replace(sm_container_memory_limit_bytes, \"name\", \"$1\", \"container\", \"(.*)\"))",
      "legendFormat": "__auto",
      "refId": "D",
      "datasource": {
@@ -331,11 +331,8 @@
    ],
    "transformations": [
     {
-     "id": "joinByField",
-     "options": {
-      "byField": "name",
-      "mode": "outer"
-     }
+     "id": "merge",
+     "options": {}
     },
     {
      "id": "organize",
@@ -344,25 +341,24 @@
        "Time": true,
        "__name__": true,
        "job": true,
-       "instance": true
+       "instance": true,
+       "service": true
       },
       "renameByName": {
-       "project": "Project",
-       "service": "Service",
        "name": "Container",
+       "project": "Project",
        "Value #A": "RAM now",
        "Value #B": "CPU 7d avg",
        "Value #C": "Limit",
        "Value #D": "RAM / limit"
       },
       "indexByName": {
-       "project": 0,
-       "service": 1,
-       "name": 2,
-       "Value #A": 3,
-       "Value #B": 4,
-       "Value #C": 5,
-       "Value #D": 6
+       "name": 0,
+       "project": 1,
+       "Value #A": 2,
+       "Value #B": 3,
+       "Value #C": 4,
+       "Value #D": 5
       }
      }
     },
@@ -386,6 +382,30 @@
      }
     },
     "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Container"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 230
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Project"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 150
+       }
+      ]
+     },
      {
       "matcher": {
        "id": "byName",
@@ -525,7 +545,7 @@
    "gridPos": {
     "x": 0,
     "y": 8,
-    "w": 16,
+    "w": 14,
     "h": 10
    },
    "datasource": {
@@ -534,58 +554,64 @@
    }
   },
   {
-   "type": "bargauge",
+   "type": "barchart",
    "title": "Traffic mix, last 24 h (requests)",
-   "description": "AI crawlers can dominate CPU of dynamic sites; consider robots.txt / rate limits for them.",
+   "description": "AI crawlers can dominate the CPU of dynamic sites; consider robots.txt / rate limits for them.",
    "targets": [
     {
      "expr": "sum by (project, class) (sm_http_requests_window{window=\"24h\",class!=\"pageview\"})",
-     "legendFormat": "{{project}} \u00b7 {{class}}",
+     "legendFormat": "__auto",
      "refId": "A",
      "datasource": {
       "type": "prometheus",
       "uid": "prometheus"
      },
      "instant": true,
-     "range": false
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "groupingToMatrix",
+     "options": {
+      "rowField": "project",
+      "columnField": "class",
+      "valueField": "Value",
+      "emptyValue": "zero"
+     }
     }
    ],
    "fieldConfig": {
     "defaults": {
      "unit": "short",
-     "thresholds": {
-      "mode": "absolute",
-      "steps": [
-       {
-        "value": null,
-        "color": "blue"
-       }
-      ]
-     },
-     "min": 0
+     "custom": {
+      "fillOpacity": 80,
+      "lineWidth": 0
+     }
     },
     "overrides": []
    },
    "options": {
     "orientation": "horizontal",
-    "displayMode": "gradient",
-    "showUnfilled": true,
-    "valueMode": "color",
-    "namePlacement": "left",
-    "sizing": "auto",
-    "reduceOptions": {
-     "calcs": [
-      "lastNotNull"
-     ],
-     "fields": "",
-     "values": false
+    "stacking": "normal",
+    "showValue": "never",
+    "barWidth": 0.7,
+    "xTickLabelRotation": 0,
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi"
     }
    },
    "id": 6,
    "gridPos": {
-    "x": 16,
+    "x": 14,
     "y": 8,
-    "w": 8,
+    "w": 10,
     "h": 10
    },
    "datasource": {
@@ -1046,10 +1072,10 @@
   {
    "type": "table",
    "title": "Images no container uses",
-   "description": "`projctl cleanup` removes them (dry-run first). Rows without a size are in-use images: ignore.",
+   "description": "`projctl cleanup` removes them (dry-run first).",
    "targets": [
     {
-     "expr": "sm_docker_image_bytes{in_use=\"0\"}",
+     "expr": "max by (image, project) (sm_docker_image_bytes{in_use=\"0\"})",
      "legendFormat": "__auto",
      "refId": "A",
      "datasource": {
@@ -1061,7 +1087,7 @@
      "format": "table"
     },
     {
-     "expr": "sm_docker_image_created_timestamp_seconds * 1000",
+     "expr": "max by (image, project) (sm_docker_image_created_timestamp_seconds * 1000 and on (image) sm_docker_image_bytes{in_use=\"0\"})",
      "legendFormat": "__auto",
      "refId": "B",
      "datasource": {
@@ -1075,11 +1101,8 @@
    ],
    "transformations": [
     {
-     "id": "joinByField",
-     "options": {
-      "byField": "image",
-      "mode": "outer"
-     }
+     "id": "merge",
+     "options": {}
     },
     {
      "id": "organize",
@@ -1088,8 +1111,7 @@
        "Time": true,
        "__name__": true,
        "job": true,
-       "instance": true,
-       "in_use": true
+       "instance": true
       },
       "renameByName": {
        "image": "Image",
@@ -1125,6 +1147,18 @@
      }
     },
     "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Image"
+      },
+      "properties": [
+       {
+        "id": "custom.width",
+        "value": 330
+       }
+      ]
+     },
      {
       "matcher": {
        "id": "byName",
