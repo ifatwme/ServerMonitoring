@@ -19,6 +19,8 @@
 
 [settings]
 idle_days = 7
+# images `projctl cleanup` never removes (used by `docker run` in scripts, e.g. certificate renewal)
+keep_images = ["goacme/lego"]
 
 [projects.example-app]
 kind = "app"
