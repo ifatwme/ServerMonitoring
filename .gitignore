@@ -1,0 +1,5 @@
+/.env
+/config/projects.toml
+/data/
+*.tmp
+__pycache__/

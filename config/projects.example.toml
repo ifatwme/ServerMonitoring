@@ -1,0 +1,36 @@
+# Project registry for the collector (copy to config/projects.toml; that file is not committed
+# because it contains host names and paths).
+#
+# [settings]
+#   idle_days      default number of days without activity before a project becomes a
+#                  "park candidate" (no human visits, commits, file edits, builds or test runs)
+#
+# [projects.<name>]   <name> = the Docker Compose project name (label com.docker.compose.project)
+#   kind           app | batch | infra    (infra is never suggested for parking)
+#   dir            the deployed repository
+#   dev_dirs       extra working directories whose edits count as development activity
+#   unit           systemd service that starts the stack (used by `projctl park/unpark`)
+#   timers         systemd timers that belong to the project (stopped while parked)
+#   url            public URL probed for uptime / TLS expiry (optional)
+#   web_container  nginx container whose access log is parsed for traffic (optional)
+#   images         image name prefixes owned by this project (for disk accounting)
+#   idle_days      per-project override
+#   keep_running   true = never suggest parking
+
+[settings]
+idle_days = 7
+
+[projects.example-app]
+kind = "app"
+dir = "/srv/example-app"
+dev_dirs = ["/srv/example-app-dev"]
+unit = "example-app.service"
+timers = ["example-app-cert-renew.timer"]
+url = "https://example.<your-domain>/"
+web_container = "example-app-web-1"
+images = ["example-app"]
+
+[projects.edge]
+kind = "infra"
+dir = "/srv/edge"
+keep_running = true

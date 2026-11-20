@@ -1,0 +1,160 @@
+groups:
+  # ── per-project resource usage (cAdvisor, grouped by the compose project label) ──
+  - name: project-usage
+    interval: 30s
+    rules:
+      - record: service:cpu_cores:rate2m
+        expr: |
+          label_replace(sum by (project, service, name) (rate(container_cpu_usage_seconds_total{name!=""}[2m])),
+                        "project", "other", "project", "")
+      - record: project:cpu_cores:rate2m
+        expr: sum by (project) (service:cpu_cores:rate2m)
+      - record: service:memory_working_set_bytes
+        expr: |
+          label_replace(sum by (project, service, name) (container_memory_working_set_bytes{name!=""}),
+                        "project", "other", "project", "")
+      - record: project:memory_working_set_bytes
+        expr: sum by (project) (service:memory_working_set_bytes)
+      - record: project:memory_rss_bytes
+        expr: |
+          sum by (project) (label_replace(container_memory_rss{name!=""}, "project", "other", "project", ""))
+      - record: project:network_receive_bytes:rate5m
+        expr: |
+          sum by (project) (label_replace(rate(container_network_receive_bytes_total{name!=""}[5m]), "project", "other", "project", ""))
+      - record: project:network_transmit_bytes:rate5m
+        expr: |
+          sum by (project) (label_replace(rate(container_network_transmit_bytes_total{name!=""}[5m]), "project", "other", "project", ""))
+      - record: project:disk_io_bytes:rate5m
+        expr: |
+          sum by (project) (label_replace(rate(container_fs_reads_bytes_total{name!=""}[5m]), "project", "other", "project", ""))
+            + on (project)
+          sum by (project) (label_replace(rate(container_fs_writes_bytes_total{name!=""}[5m]), "project", "other", "project", ""))
+      - record: project:cpu_share
+        expr: project:cpu_cores:rate2m / scalar(sum(project:cpu_cores:rate2m))
+      - record: project:memory_share
+        expr: project:memory_working_set_bytes / scalar(sum(project:memory_working_set_bytes))
+      # CPU-hours burned per engaged (real-browser) visitor over the last day: a "waste" indicator
+      - record: project:cpu_core_seconds_per_engaged_visitor:24h
+        expr: |
+          sum by (project) (avg_over_time(project:cpu_cores:rate2m[24h]) * 86400)
+            / on (project) clamp_min(sm_http_unique_clients_window{class="engaged",window="24h"}, 1)
+
+  - name: uptime
+    interval: 60s
+    rules:
+      - record: project:probe_success:avg24h
+        expr: avg by (project) (avg_over_time(probe_success{job="uptime"}[24h]))
+      - record: project:probe_success:avg7d
+        expr: avg by (project) (avg_over_time(probe_success{job="uptime"}[7d]))
+      - record: project:tls_expiry_days
+        expr: min by (project) ((probe_ssl_earliest_cert_expiry{job="uptime"} - time()) / 86400)
+
+  # ── alerts (shown in Grafana → Alerting → Alert rules → data source-managed) ──
+  - name: alerts
+    rules:
+      - alert: SiteDown
+        expr: probe_success{job="uptime"} == 0 unless on (project) sm_project_parked == 1
+        for: 3m
+        labels: { severity: critical }
+        annotations: { summary: "{{ $labels.project }} public URL is down" }
+
+      - alert: TLSCertificateExpiringSoon
+        expr: project:tls_expiry_days < 14
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.project }} certificate expires in {{ $value | printf \"%.0f\" }} days (renew timer broken?)" }
+
+      - alert: ContainerStopped
+        expr: sm_container_up == 0 unless on (project) sm_project_parked == 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.container }} ({{ $labels.project }}) is not running" }
+
+      - alert: ContainerUnhealthy
+        expr: sm_container_healthy == 0 and sm_container_up == 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.container }} healthcheck failing" }
+
+      - alert: ContainerRestartLoop
+        expr: increase(sm_container_restart_count[15m]) > 2
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.container }} restarted {{ $value }} times in 15 min" }
+
+      - alert: OOMKill
+        expr: increase(node_vmstat_oom_kill[10m]) > 0
+        labels: { severity: warning }
+        annotations: { summary: "The kernel OOM-killed a process (see the Projects dashboard → OOM events)" }
+
+      - alert: ContainerNearMemoryLimit
+        expr: |
+          max by (project, service, name) (service:memory_working_set_bytes)
+            / on (name) group_left max by (name) (label_replace(sm_container_memory_limit_bytes, "name", "$1", "container", "(.*)")) > 0.9
+        for: 15m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.name }} uses {{ $value | humanizePercentage }} of its memory limit" }
+
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: { severity: critical }
+        annotations: { summary: "Only {{ $value | humanizePercentage }} RAM available (no swap on this host)" }
+
+      - alert: HostMemoryPressure
+        expr: rate(node_pressure_memory_waiting_seconds_total[5m]) > 0.10
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Processes are stalled on memory {{ $value | humanizePercentage }} of the time" }
+
+      - alert: HostCPUSaturated
+        expr: node_load5 / scalar(count(node_cpu_seconds_total{mode="idle"})) > 1.5
+        for: 30m
+        labels: { severity: warning }
+        annotations: { summary: "5-min load is {{ $value | printf \"%.1f\" }}x the core count" }
+
+      - alert: DiskAlmostFull
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.10
+        for: 10m
+        labels: { severity: critical }
+        annotations: { summary: "Root filesystem has {{ $value | humanizePercentage }} free" }
+
+      - alert: DiskWillFillIn7Days
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[12h], 7 * 86400) < 0
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: "At the current rate / fills within 7 days" }
+
+      - alert: ProjectJobFailed
+        expr: sm_unit_last_success == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.unit }} ({{ $labels.project }}) last run failed" }
+
+      - alert: CollectorStale
+        expr: time() - sm_collector_last_run_timestamp_seconds > 300 or absent(sm_collector_last_run_timestamp_seconds)
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "server-monitor collector has not run for 5 min (server-monitor-collect.timer)" }
+
+      - alert: ProjectIdle
+        expr: sm_project_park_candidate == 1
+        for: 1h
+        labels: { severity: info }
+        annotations: { summary: "{{ $labels.project }} has had no visitors, commits, builds or tests for its idle threshold — consider `projctl park {{ $labels.project }}`" }
+
+      - alert: AICrawlerLoad
+        expr: sm_http_requests_window{class="ai_bot",window="24h"} > 5000
+        for: 1h
+        labels: { severity: info }
+        annotations: { summary: "{{ $labels.project }} served {{ $value }} AI-crawler requests in 24 h" }
+
+      - alert: SSHBruteForce
+        expr: increase(sm_ssh_auth_failures_total[1h]) > 50
+        labels: { severity: info }
+        annotations: { summary: "{{ $value }} failed SSH logins in the last hour" }
+
+      - alert: RebootRequired
+        expr: sm_host_reboot_required == 1
+        for: 24h
+        labels: { severity: info }
+        annotations: { summary: "An installed update needs a reboot" }

@@ -1,0 +1,2151 @@
+{
+ "uid": "sm-project",
+ "title": "Project detail",
+ "description": "Everything about one project.",
+ "tags": [
+  "server-monitor"
+ ],
+ "timezone": "browser",
+ "editable": false,
+ "graphTooltip": 1,
+ "schemaVersion": 39,
+ "refresh": "1m",
+ "time": {
+  "from": "now-24h",
+  "to": "now"
+ },
+ "templating": {
+  "list": [
+   {
+    "name": "project",
+    "label": "Project",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(sm_project_info, project)",
+     "refId": "v"
+    },
+    "definition": "label_values(sm_project_info, project)",
+    "refresh": 2,
+    "current": {},
+    "includeAll": false,
+    "multi": false,
+    "sort": 1
+   }
+  ]
+ },
+ "panels": [
+  {
+   "type": "row",
+   "title": "Status",
+   "id": 1,
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "type": "stat",
+   "title": "Site",
+   "description": "",
+   "targets": [
+    {
+     "expr": "max(probe_success{job=\"uptime\",project=\"$project\"})",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "red"
+       },
+       {
+        "value": 1,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "1": {
+         "text": "UP",
+         "color": "green"
+        },
+        "0": {
+         "text": "DOWN",
+         "color": "red"
+        }
+       }
+      }
+     ]
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 2,
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Uptime (range)",
+   "description": "",
+   "targets": [
+    {
+     "expr": "avg_over_time(probe_success{job=\"uptime\",project=\"$project\"}[$__range])",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "red"
+       },
+       {
+        "value": 0.95,
+        "color": "orange"
+       },
+       {
+        "value": 0.99,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 2
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 3,
+   "gridPos": {
+    "x": 3,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "TLS expires in",
+   "description": "",
+   "targets": [
+    {
+     "expr": "project:tls_expiry_days{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "d",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "red"
+       },
+       {
+        "value": 14,
+        "color": "orange"
+       },
+       {
+        "value": 30,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 4,
+   "gridPos": {
+    "x": 6,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Containers running",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_project_containers{project=\"$project\",state=\"running\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 5,
+   "gridPos": {
+    "x": 9,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Containers stopped",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_project_containers{project=\"$project\",state=\"stopped\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       },
+       {
+        "value": 1,
+        "color": "red"
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 6,
+   "gridPos": {
+    "x": 12,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Idle for",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_project_idle_seconds{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       },
+       {
+        "value": 259200,
+        "color": "orange"
+       },
+       {
+        "value": 604800,
+        "color": "red"
+       }
+      ]
+     },
+     "mappings": []
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 7,
+   "gridPos": {
+    "x": 15,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Park candidate",
+   "description": "Running but no engaged visitor, commit, edit, build or test run within the idle threshold.",
+   "targets": [
+    {
+     "expr": "sm_project_park_candidate{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "1": {
+         "text": "YES",
+         "color": "orange"
+        },
+        "0": {
+         "text": "no",
+         "color": "text"
+        }
+       }
+      }
+     ]
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 8,
+   "gridPos": {
+    "x": 18,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "RAM now",
+   "description": "",
+   "targets": [
+    {
+     "expr": "project:memory_working_set_bytes{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": []
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 9,
+   "gridPos": {
+    "x": 21,
+    "y": 1,
+    "w": 3,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Last activity",
+   "description": "commit / edit (uncommitted or dev-dir files) / build (newest project image) / container_start (incl. `compose run` tests) / human_visit (engaged browser)",
+   "targets": [
+    {
+     "expr": "sm_project_last_activity_timestamp_seconds{project=\"$project\"} * 1000",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "project": true
+      },
+      "renameByName": {
+       "signal": "Signal",
+       "Value": "When"
+      },
+      "indexByName": {
+       "signal": 0,
+       "Value": 1
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "When"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "dateTimeFromNow"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 10,
+   "gridPos": {
+    "x": 0,
+    "y": 5,
+    "w": 6,
+    "h": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Containers",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_container_info{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_container_restart_count{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "(time() - sm_container_started_timestamp_seconds{project=\"$project\"}) * sm_container_up{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "C",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_container_memory_limit_bytes{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "D",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_container_oom_killed{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "E",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "service",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "project": true,
+       "container": true,
+       "Value #A": true
+      },
+      "renameByName": {
+       "service": "Service",
+       "state": "State",
+       "health": "Health",
+       "Value #B": "Restarts",
+       "Value #C": "Up for",
+       "Value #D": "Mem limit",
+       "Value #E": "Last exit OOM",
+       "image": "Image"
+      },
+      "indexByName": {
+       "service": 0,
+       "state": 1,
+       "health": 2,
+       "Value #B": 3,
+       "Value #C": 4,
+       "Value #D": 5,
+       "Value #E": 6,
+       "image": 7
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "State"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "running": {
+            "color": "green"
+           },
+           "exited": {
+            "color": "red"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Health"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "healthy": {
+            "color": "green"
+           },
+           "unhealthy": {
+            "color": "red"
+           },
+           "none": {
+            "color": "text"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Up for"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "s"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Mem limit"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "bytes"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Last exit OOM"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "YES",
+            "color": "orange"
+           },
+           "0": {
+            "text": "no",
+            "color": "text"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 11,
+   "gridPos": {
+    "x": 6,
+    "y": 5,
+    "w": 12,
+    "h": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Jobs / units",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_unit_last_success{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_unit_last_start_timestamp_seconds{project=\"$project\"} * 1000",
+     "legendFormat": "__auto",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_unit_last_duration_seconds{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "C",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_unit_enabled{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "D",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "unit",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "project": true
+      },
+      "renameByName": {
+       "unit": "Unit",
+       "Value #A": "Last run",
+       "Value #B": "Started",
+       "Value #C": "Took",
+       "Value #D": "Enabled"
+      },
+      "indexByName": {
+       "unit": 0,
+       "Value #A": 1,
+       "Value #B": 2,
+       "Value #C": 3,
+       "Value #D": 4
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Last run"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "ok",
+            "color": "green"
+           },
+           "0": {
+            "text": "FAILED",
+            "color": "red"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Started"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "dateTimeFromNow"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Took"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "s"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Enabled"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "yes"
+           },
+           "0": {
+            "text": "no"
+           }
+          }
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 12,
+   "gridPos": {
+    "x": 18,
+    "y": 5,
+    "w": 6,
+    "h": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Resources",
+   "id": 13,
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 12,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "type": "timeseries",
+   "title": "CPU per service (cores)",
+   "description": "",
+   "targets": [
+    {
+     "expr": "service:cpu_cores:rate2m{project=\"$project\"}",
+     "legendFormat": "{{service}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "fillOpacity": 60,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "normal"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 14,
+   "gridPos": {
+    "x": 0,
+    "y": 13,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Memory per service (working set) vs limit",
+   "description": "",
+   "targets": [
+    {
+     "expr": "service:memory_working_set_bytes{project=\"$project\"}",
+     "legendFormat": "{{service}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    },
+    {
+     "expr": "sm_container_memory_limit_bytes{project=\"$project\"} * sm_container_up{project=\"$project\"}",
+     "legendFormat": "limit {{service}}",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "custom": {
+      "fillOpacity": 10,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byFrameRefID",
+       "options": "B"
+      },
+      "properties": [
+       {
+        "id": "custom.lineStyle",
+        "value": {
+         "fill": "dash",
+         "dash": [
+          6,
+          4
+         ]
+        }
+       },
+       {
+        "id": "custom.fillOpacity",
+        "value": 0
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 15,
+   "gridPos": {
+    "x": 12,
+    "y": 13,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Network (bytes/s)",
+   "description": "",
+   "targets": [
+    {
+     "expr": "project:network_receive_bytes:rate5m{project=\"$project\"}",
+     "legendFormat": "in",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    },
+    {
+     "expr": "project:network_transmit_bytes:rate5m{project=\"$project\"}",
+     "legendFormat": "out",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "Bps",
+     "custom": {
+      "fillOpacity": 10,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "right",
+     "calcs": []
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 16,
+   "gridPos": {
+    "x": 0,
+    "y": 21,
+    "w": 8,
+    "h": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Disk I/O (bytes/s)",
+   "description": "",
+   "targets": [
+    {
+     "expr": "project:disk_io_bytes:rate5m{project=\"$project\"}",
+     "legendFormat": "read+write",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "Bps",
+     "custom": {
+      "fillOpacity": 10,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "right",
+     "calcs": []
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 17,
+   "gridPos": {
+    "x": 8,
+    "y": 21,
+    "w": 8,
+    "h": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Stall per service (PSI: share of time waiting)",
+   "description": "Throttling by the cpus: limit shows up as cpu stall.",
+   "targets": [
+    {
+     "expr": "sum by (service) (rate(container_pressure_cpu_waiting_seconds_total{project=\"$project\"}[5m]))",
+     "legendFormat": "cpu {{service}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    },
+    {
+     "expr": "sum by (service) (rate(container_pressure_memory_waiting_seconds_total{project=\"$project\"}[5m]))",
+     "legendFormat": "mem {{service}}",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    },
+    {
+     "expr": "sum by (service) (rate(container_pressure_io_waiting_seconds_total{project=\"$project\"}[5m]))",
+     "legendFormat": "io {{service}}",
+     "refId": "C",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "custom": {
+      "fillOpacity": 10,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "right",
+     "calcs": []
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 18,
+   "gridPos": {
+    "x": 16,
+    "y": 21,
+    "w": 8,
+    "h": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "bargauge",
+   "title": "Disk",
+   "description": "repo = deployed dir (incl. data), dev = dev/archive dirs, images = project images (shared layers counted per image), volumes = docker volumes",
+   "targets": [
+    {
+     "expr": "sm_project_disk_bytes{project=\"$project\"}",
+     "legendFormat": "{{kind}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "blue"
+       }
+      ]
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "showUnfilled": true,
+    "valueMode": "color",
+    "namePlacement": "left",
+    "sizing": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 19,
+   "gridPos": {
+    "x": 0,
+    "y": 28,
+    "w": 8,
+    "h": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Images",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_docker_image_bytes{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_docker_image_created_timestamp_seconds{project=\"$project\"} * 1000",
+     "legendFormat": "__auto",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "image",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "project": true
+      },
+      "renameByName": {
+       "image": "Image",
+       "in_use": "In use",
+       "Value #A": "Size",
+       "Value #B": "Built"
+      },
+      "indexByName": {
+       "image": 0,
+       "in_use": 1,
+       "Value #A": 2,
+       "Value #B": 3
+      }
+     }
+    },
+    {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "Size",
+        "desc": true
+       }
+      ]
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Size"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "bytes"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Built"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "dateTimeFromNow"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "In use"
+      },
+      "properties": [
+       {
+        "id": "mappings",
+        "value": [
+         {
+          "type": "value",
+          "options": {
+           "1": {
+            "text": "yes",
+            "color": "green"
+           },
+           "0": {
+            "text": "unused",
+            "color": "orange"
+           }
+          }
+         }
+        ]
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 20,
+   "gridPos": {
+    "x": 8,
+    "y": 28,
+    "w": 16,
+    "h": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Traffic (nginx access log)",
+   "id": 21,
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 34,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "type": "timeseries",
+   "title": "Requests/min by client class",
+   "description": "human = browser-like UA that is not a known bot/scanner; ai_bot = GPTBot, ClaudeBot, ...; scanner = exploit probes (/.env, /wp-, odd methods); probe = this monitor + healthchecks",
+   "targets": [
+    {
+     "expr": "sum by (class) (rate(sm_http_requests_total{project=\"$project\"}[5m])) * 60",
+     "legendFormat": "{{class}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "fillOpacity": 60,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "normal"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 22,
+   "gridPos": {
+    "x": 0,
+    "y": 35,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Responses/min by status",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sum by (code) (rate(sm_http_requests_total{project=\"$project\"}[5m])) * 60",
+     "legendFormat": "{{code}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "fillOpacity": 60,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "normal"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 23,
+   "gridPos": {
+    "x": 12,
+    "y": 35,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Who is calling (last 24 h)",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_http_agent_requests_24h{project=\"$project\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "project": true
+      },
+      "renameByName": {
+       "agent": "Agent",
+       "class": "Class",
+       "Value": "Requests"
+      },
+      "indexByName": {
+       "agent": 0,
+       "class": 1,
+       "Value": 2
+      }
+     }
+    },
+    {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "Requests",
+        "desc": true
+       }
+      ]
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "filterable": false
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 24,
+   "gridPos": {
+    "x": 0,
+    "y": 43,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "bargauge",
+   "title": "Requests by class (24 h)",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_http_requests_window{project=\"$project\",window=\"24h\"}",
+     "legendFormat": "{{class}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "blue"
+       }
+      ]
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "showUnfilled": true,
+    "valueMode": "color",
+    "namePlacement": "left",
+    "sizing": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 25,
+   "gridPos": {
+    "x": 8,
+    "y": 43,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "bargauge",
+   "title": "Distinct clients (7 d)",
+   "description": "engaged = loaded a page and its assets: the best estimate of real people",
+   "targets": [
+    {
+     "expr": "sm_http_unique_clients_window{project=\"$project\",window=\"7d\"}",
+     "legendFormat": "{{class}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "blue"
+       }
+      ]
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "showUnfilled": true,
+    "valueMode": "color",
+    "namePlacement": "left",
+    "sizing": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 26,
+   "gridPos": {
+    "x": 16,
+    "y": 43,
+    "w": 8,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Probe response time",
+   "description": "",
+   "targets": [
+    {
+     "expr": "probe_duration_seconds{job=\"uptime\",project=\"$project\"}",
+     "legendFormat": "total",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "custom": {
+      "fillOpacity": 10,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "right",
+     "calcs": []
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 27,
+   "gridPos": {
+    "x": 0,
+    "y": 51,
+    "w": 12,
+    "h": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "state-timeline",
+   "title": "Availability",
+   "targets": [
+    {
+     "expr": "probe_success{job=\"uptime\",project=\"$project\"}",
+     "legendFormat": "site",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    },
+    {
+     "expr": "min(sm_container_up{project=\"$project\"})",
+     "legendFormat": "all containers up",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "1": {
+         "text": "UP",
+         "color": "green"
+        },
+        "0": {
+         "text": "DOWN",
+         "color": "red"
+        }
+       }
+      }
+     ],
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "red"
+       },
+       {
+        "value": 1,
+        "color": "green"
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showValue": "never",
+    "mergeValues": true,
+    "legend": {
+     "showLegend": false
+    }
+   },
+   "id": 28,
+   "gridPos": {
+    "x": 12,
+    "y": 51,
+    "w": 12,
+    "h": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  }
+ ],
+ "annotations": {
+  "list": []
+ },
+ "links": [
+  {
+   "type": "dashboards",
+   "tags": [
+    "server-monitor"
+   ],
+   "asDropdown": false,
+   "title": "Dashboards",
+   "includeVars": false,
+   "keepTime": true
+  }
+ ]
+}

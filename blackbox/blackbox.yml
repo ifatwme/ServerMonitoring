@@ -1,0 +1,15 @@
+modules:
+  https_2xx:
+    prober: http
+    timeout: 15s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: true
+      follow_redirects: true
+      fail_if_not_ssl: true
+      valid_status_codes: []        # default: 2xx
+      headers:
+        User-Agent: server-monitor-probe/1.0
+      tls_config:
+        insecure_skip_verify: false

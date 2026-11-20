@@ -1,0 +1,1312 @@
+{
+ "uid": "sm-waste",
+ "title": "Waste & recommendations",
+ "description": "What uses resources without giving anything back.",
+ "tags": [
+  "server-monitor"
+ ],
+ "timezone": "browser",
+ "editable": false,
+ "graphTooltip": 1,
+ "schemaVersion": 39,
+ "refresh": "1m",
+ "time": {
+  "from": "now-7d",
+  "to": "now"
+ },
+ "templating": {
+  "list": []
+ },
+ "panels": [
+  {
+   "type": "row",
+   "title": "Park candidates  \u2192  `projctl suggest` / `projctl park <project> -y`",
+   "id": 1,
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "type": "table",
+   "title": "Idle projects that still hold resources",
+   "description": "Empty = nothing idle past its threshold (idle_days in config/projects.toml).",
+   "targets": [
+    {
+     "expr": "sm_project_park_candidate == 1",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "project:memory_working_set_bytes and on (project) sm_project_park_candidate == 1",
+     "legendFormat": "__auto",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "avg_over_time(project:cpu_cores:rate2m[24h]) and on (project) sm_project_park_candidate == 1",
+     "legendFormat": "__auto",
+     "refId": "C",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_project_idle_seconds and on (project) sm_project_park_candidate == 1",
+     "legendFormat": "__auto",
+     "refId": "D",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_http_unique_clients_window{class=\"engaged\",window=\"7d\"} and on (project) sm_project_park_candidate == 1",
+     "legendFormat": "__auto",
+     "refId": "E",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "merge",
+     "options": {}
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "Value #A": true
+      },
+      "renameByName": {
+       "project": "Project",
+       "Value #B": "RAM freed",
+       "Value #C": "CPU freed (24h avg)",
+       "Value #D": "Idle for",
+       "Value #E": "Visitors 7d"
+      },
+      "indexByName": {
+       "project": 0,
+       "Value #B": 1,
+       "Value #C": 2,
+       "Value #D": 3,
+       "Value #E": 4
+      }
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "RAM freed"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "bytes"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "CPU freed (24h avg)"
+      },
+      "properties": [
+       {
+        "id": "decimals",
+        "value": 2
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Idle for"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "s"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 2,
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 12,
+    "h": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "bargauge",
+   "title": "CPU core-seconds per real visitor (24 h)",
+   "description": "How much CPU a project burned per engaged visitor yesterday. High = background work nobody is looking at (demo loops, crawlers, idle model servers).",
+   "targets": [
+    {
+     "expr": "project:cpu_core_seconds_per_engaged_visitor:24h",
+     "legendFormat": "{{project}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       },
+       {
+        "value": 600,
+        "color": "orange"
+       },
+       {
+        "value": 3600,
+        "color": "red"
+       }
+      ]
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "showUnfilled": true,
+    "valueMode": "color",
+    "namePlacement": "left",
+    "sizing": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 3,
+   "gridPos": {
+    "x": 12,
+    "y": 1,
+    "w": 12,
+    "h": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Heavy but quiet",
+   "id": 4,
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 7,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "type": "table",
+   "title": "Containers: memory held vs. CPU used (7 d)",
+   "description": "Big RAM + ~0 CPU = a loaded model or cache nobody is using. Near 100 % of limit = OOM risk.",
+   "targets": [
+    {
+     "expr": "service:memory_working_set_bytes",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "avg_over_time(service:cpu_cores:rate2m[7d])",
+     "legendFormat": "__auto",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "max by (name) (label_replace(sm_container_memory_limit_bytes, \"name\", \"$1\", \"container\", \"(.*)\"))",
+     "legendFormat": "__auto",
+     "refId": "C",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "service:memory_working_set_bytes / on (name) group_left max by (name) (label_replace(sm_container_memory_limit_bytes, \"name\", \"$1\", \"container\", \"(.*)\"))",
+     "legendFormat": "__auto",
+     "refId": "D",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "name",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true
+      },
+      "renameByName": {
+       "project": "Project",
+       "service": "Service",
+       "name": "Container",
+       "Value #A": "RAM now",
+       "Value #B": "CPU 7d avg",
+       "Value #C": "Limit",
+       "Value #D": "RAM / limit"
+      },
+      "indexByName": {
+       "project": 0,
+       "service": 1,
+       "name": 2,
+       "Value #A": 3,
+       "Value #B": 4,
+       "Value #C": 5,
+       "Value #D": 6
+      }
+     }
+    },
+    {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "RAM now",
+        "desc": true
+       }
+      ]
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "RAM now"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "bytes"
+       },
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "value": null,
+           "color": "text"
+          },
+          {
+           "value": 300000000.0,
+           "color": "orange"
+          },
+          {
+           "value": 1000000000.0,
+           "color": "red"
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "CPU 7d avg"
+      },
+      "properties": [
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "value": null,
+           "color": "text"
+          },
+          {
+           "value": 0.1,
+           "color": "orange"
+          },
+          {
+           "value": 0.5,
+           "color": "red"
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "color-text"
+        }
+       },
+       {
+        "id": "decimals",
+        "value": 3
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Limit"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "bytes"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "RAM / limit"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percentunit"
+       },
+       {
+        "id": "thresholds",
+        "value": {
+         "mode": "absolute",
+         "steps": [
+          {
+           "value": null,
+           "color": "green"
+          },
+          {
+           "value": 0.8,
+           "color": "orange"
+          },
+          {
+           "value": 0.9,
+           "color": "red"
+          }
+         ]
+        }
+       },
+       {
+        "id": "custom.cellOptions",
+        "value": {
+         "type": "gauge"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 5,
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 16,
+    "h": 10
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "bargauge",
+   "title": "Traffic mix, last 24 h (requests)",
+   "description": "AI crawlers can dominate CPU of dynamic sites; consider robots.txt / rate limits for them.",
+   "targets": [
+    {
+     "expr": "sum by (project, class) (sm_http_requests_window{window=\"24h\",class!=\"pageview\"})",
+     "legendFormat": "{{project}} \u00b7 {{class}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "blue"
+       }
+      ]
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "showUnfilled": true,
+    "valueMode": "color",
+    "namePlacement": "left",
+    "sizing": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 6,
+   "gridPos": {
+    "x": 16,
+    "y": 8,
+    "w": 8,
+    "h": 10
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "CPU of each project vs. its real visitors",
+   "description": "Compare with the visitor counts on the overview; CPU that does not follow traffic is background work.",
+   "targets": [
+    {
+     "expr": "project:cpu_cores:rate2m",
+     "legendFormat": "{{project}} cpu",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "fillOpacity": 10,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max",
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 7,
+   "gridPos": {
+    "x": 0,
+    "y": 18,
+    "w": 24,
+    "h": 7
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "row",
+   "title": "Disk",
+   "id": 8,
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 24,
+    "h": 1
+   },
+   "panels": []
+  },
+  {
+   "type": "stat",
+   "title": "Build cache reclaimable",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_docker_reclaimable_bytes{type=\"build_cache\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       },
+       {
+        "value": 5000000000.0,
+        "color": "orange"
+       },
+       {
+        "value": 15000000000.0,
+        "color": "red"
+       }
+      ]
+     },
+     "mappings": []
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 9,
+   "gridPos": {
+    "x": 0,
+    "y": 26,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Images reclaimable",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_docker_reclaimable_bytes{type=\"images\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       },
+       {
+        "value": 5000000000.0,
+        "color": "orange"
+       },
+       {
+        "value": 10000000000.0,
+        "color": "red"
+       }
+      ]
+     },
+     "mappings": []
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 10,
+   "gridPos": {
+    "x": 4,
+    "y": 26,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Disk free",
+   "description": "",
+   "targets": [
+    {
+     "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "red"
+       },
+       {
+        "value": 8000000000.0,
+        "color": "orange"
+       },
+       {
+        "value": 15000000000.0,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": []
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 11,
+   "gridPos": {
+    "x": 8,
+    "y": 26,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Prometheus TSDB",
+   "description": "",
+   "targets": [
+    {
+     "expr": "prometheus_tsdb_storage_blocks_bytes + prometheus_tsdb_wal_storage_size_bytes",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": []
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 12,
+   "gridPos": {
+    "x": 12,
+    "y": 26,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Pending apt upgrades",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_apt_upgradable_packages",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       },
+       {
+        "value": 10,
+        "color": "orange"
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 13,
+   "gridPos": {
+    "x": 16,
+    "y": 26,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Reboot required",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sm_host_reboot_required",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "green"
+       }
+      ]
+     },
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "1": {
+         "text": "YES",
+         "color": "orange"
+        },
+        "0": {
+         "text": "no",
+         "color": "text"
+        }
+       }
+      }
+     ]
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "auto",
+    "justifyMode": "center",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 14,
+   "gridPos": {
+    "x": 20,
+    "y": 26,
+    "w": 4,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "table",
+   "title": "Images no container uses",
+   "description": "`projctl cleanup` removes them (dry-run first). Rows without a size are in-use images: ignore.",
+   "targets": [
+    {
+     "expr": "sm_docker_image_bytes{in_use=\"0\"}",
+     "legendFormat": "__auto",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    },
+    {
+     "expr": "sm_docker_image_created_timestamp_seconds * 1000",
+     "legendFormat": "__auto",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false,
+     "format": "table"
+    }
+   ],
+   "transformations": [
+    {
+     "id": "joinByField",
+     "options": {
+      "byField": "image",
+      "mode": "outer"
+     }
+    },
+    {
+     "id": "organize",
+     "options": {
+      "excludeByName": {
+       "Time": true,
+       "__name__": true,
+       "job": true,
+       "instance": true,
+       "in_use": true
+      },
+      "renameByName": {
+       "image": "Image",
+       "project": "Project",
+       "Value #A": "Size",
+       "Value #B": "Built"
+      },
+      "indexByName": {
+       "image": 0,
+       "project": 1,
+       "Value #A": 2,
+       "Value #B": 3
+      }
+     }
+    },
+    {
+     "id": "sortBy",
+     "options": {
+      "sort": [
+       {
+        "field": "Size",
+        "desc": true
+       }
+      ]
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Size"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "bytes"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Built"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "dateTimeFromNow"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false
+    }
+   },
+   "id": 15,
+   "gridPos": {
+    "x": 0,
+    "y": 30,
+    "w": 12,
+    "h": 10
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "bargauge",
+   "title": "Disk per project",
+   "description": "",
+   "targets": [
+    {
+     "expr": "sum by (project) (sm_project_disk_bytes)",
+     "legendFormat": "{{project}}",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "value": null,
+        "color": "blue"
+       }
+      ]
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "gradient",
+    "showUnfilled": true,
+    "valueMode": "color",
+    "namePlacement": "left",
+    "sizing": "auto",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "id": 16,
+   "gridPos": {
+    "x": 12,
+    "y": 30,
+    "w": 12,
+    "h": 10
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Root filesystem free",
+   "description": "",
+   "targets": [
+    {
+     "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"}",
+     "legendFormat": "free",
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    },
+    {
+     "expr": "predict_linear(node_filesystem_avail_bytes{mountpoint=\"/\"}[24h], 7*86400)",
+     "legendFormat": "in 7 days (trend)",
+     "refId": "B",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "custom": {
+      "fillOpacity": 10,
+      "lineWidth": 1,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      },
+      "spanNulls": 120000
+     },
+     "min": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "right",
+     "calcs": []
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   },
+   "id": 17,
+   "gridPos": {
+    "x": 0,
+    "y": 40,
+    "w": 24,
+    "h": 6
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   }
+  }
+ ],
+ "annotations": {
+  "list": []
+ },
+ "links": [
+  {
+   "type": "dashboards",
+   "tags": [
+    "server-monitor"
+   ],
+   "asDropdown": false,
+   "title": "Dashboards",
+   "includeVars": false,
+   "keepTime": true
+  }
+ ]
+}

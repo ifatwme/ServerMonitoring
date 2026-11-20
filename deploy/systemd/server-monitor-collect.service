@@ -1,0 +1,10 @@
+[Unit]
+Description=server-monitor collector (container state, traffic, activity, disk -> textfile metrics)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/server-monitor/collector/collect.py
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=240

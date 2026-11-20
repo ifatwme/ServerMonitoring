@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""projctl — see which projects use the server's resources and park the idle ones.
+
+  projctl ls                     every project: state, CPU, RAM, disk, visitors, idle time
+  projctl suggest                what to park / clean up, with the RAM/disk it would free
+  projctl park <project> [-y]    stop its stack + timers (remembered; dashboards show it as parked)
+  projctl unpark <project> [-y]  start it again exactly as it was enabled before
+  projctl cleanup [-y]           remove docker build cache + images no container uses (dry-run without -y)
+
+Reads config/projects.toml, the collector state (/var/lib/server-monitor) and Prometheus
+(127.0.0.1:$PROM_PORT) for live CPU/RAM. Without -y every command only prints what it would do.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+import tomllib
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CONFIG = Path(os.environ.get("SM_CONFIG", ROOT / "config" / "projects.toml"))
+STATE_DIR = Path(os.environ.get("SM_STATE_DIR", "/var/lib/server-monitor"))
+PARKED = STATE_DIR / "parked.json"
+
+
+def env_port() -> str:
+    try:
+        for l in (ROOT / ".env").read_text().splitlines():
+            if l.startswith("PROM_PORT="):
+                return l.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return "9090"
+
+
+PROM = f"http://127.0.0.1:{env_port()}"
+
+
+def run(cmd: list[str], doit: bool, cwd: str | None = None) -> bool:
+    print(("  $ " if doit else "  (dry-run) $ ") + " ".join(cmd))
+    if not doit:
+        return True
+    r = subprocess.run(cmd, cwd=cwd)
+    return r.returncode == 0
+
+
+def sh(*cmd: str) -> str:
+    return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+
+
+def prom(q: str) -> dict[str, float]:
+    try:
+        url = f"{PROM}/api/v1/query?" + urllib.parse.urlencode({"query": q})
+        data = json.load(urllib.request.urlopen(url, timeout=5))
+        return {r["metric"].get("project", ""): float(r["value"][1]) for r in data["data"]["result"]}
+    except Exception:
+        return {}
+
+
+def load():
+    cfg = tomllib.loads(CONFIG.read_text())
+    st = json.loads((STATE_DIR / "state.json").read_text()) if (STATE_DIR / "state.json").exists() else {}
+    parked = json.loads(PARKED.read_text()) if PARKED.exists() else {}
+    return cfg.get("projects", {}), st, parked
+
+
+def human(n: float) -> str:
+    for u in ("B", "K", "M", "G", "T"):
+        if abs(n) < 1024:
+            return f"{n:.0f}{u}" if u in ("B", "K") else f"{n:.1f}{u}"
+        n /= 1024
+    return f"{n:.1f}P"
+
+
+def ago(ts: float) -> str:
+    if not ts:
+        return "never"
+    d = time.time() - ts
+    return f"{d/86400:.1f}d" if d > 86400 else f"{d/3600:.1f}h" if d > 3600 else f"{d/60:.0f}m"
+
+
+def cmd_ls(_):
+    projects, st, parked = load()
+    summ = st.get("summary", {})
+    slow = st.get("slow", {}).get("projects", {})
+    cpu = prom("project:cpu_cores:rate2m")
+    cpu24 = prom("avg_over_time(project:cpu_cores:rate2m[24h])")
+    mem = prom("project:memory_working_set_bytes")
+    vis = prom('sm_http_unique_clients_window{class="engaged",window="7d"}')
+    bots = prom('sum by (project) (sm_http_requests_window{class=~"ai_bot|bot",window="24h"})')
+    print(f"{'PROJECT':22} {'STATE':10} {'CPU now':>7} {'CPU 24h':>7} {'RAM':>7} {'DISK':>7} {'VISIT7d':>7} "
+          f"{'BOTS24h':>7} {'IDLE':>6}  NOTE")
+    for p, c in projects.items():
+        s = summ.get(p, {})
+        disk = sum(v for k, v in slow.get(p, {}).items() if k.startswith("disk_"))
+        state = ("parked" if p in parked else
+                 "degraded" if s.get("stopped") or s.get("unhealthy") else
+                 "running" if s.get("running") else "no-svc")
+        note = []
+        if s.get("candidate"):
+            note.append("PARK CANDIDATE")
+        if s.get("stopped"):
+            note.append(f"{s['stopped']} container(s) stopped")
+        if c.get("kind") == "infra":
+            note.append("infra")
+        idle = s.get("idle_days")
+        print(f"{p:22} {state:10} {cpu.get(p, 0):7.2f} {cpu24.get(p, 0):7.2f} {human(mem.get(p, 0)):>7} "
+              f"{human(disk):>7} {vis.get(p, 0):7.0f} {bots.get(p, 0):7.0f} "
+              f"{(f'{idle}d' if idle is not None else '-'):>6}  {', '.join(note)}")
+    if not cpu:
+        print("\n(Prometheus not reachable: CPU/RAM columns are empty)")
+
+
+def cmd_suggest(_):
+    projects, st, parked = load()
+    summ = st.get("summary", {})
+    mem = prom("project:memory_working_set_bytes")
+    cpu24 = prom("avg_over_time(project:cpu_cores:rate2m[24h])")
+    print("Park candidates (running, but no engaged visitor / commit / edit / build / test run within the threshold):")
+    any_ = False
+    for p, s in summ.items():
+        if s.get("candidate"):
+            any_ = True
+            sig = {k: ago(v) for k, v in s.get("signals", {}).items()}
+            print(f"  - {p}: frees ~{human(mem.get(p, 0))} RAM, {cpu24.get(p, 0):.2f} CPU cores (24h avg); "
+                  f"idle {s['idle_days']}d — last " + ", ".join(f"{k} {v}" for k, v in sig.items()))
+            print(f"      projctl park {p} -y")
+    if not any_:
+        print("  none right now")
+    print("\nDegraded (containers stopped / unhealthy while the project is not parked):")
+    for p, s in summ.items():
+        if (s.get("stopped") or s.get("unhealthy")) and p not in parked:
+            print(f"  - {p}: {s.get('stopped', 0)} stopped, {s.get('unhealthy', 0)} unhealthy")
+    imgs = st.get("slow", {}).get("images", [])
+    unused = {i["id"]: i for i in imgs if not i["in_use"]}
+    df = st.get("slow", {}).get("df", {})
+    print(f"\nDisk: build cache reclaimable {human(df.get('Build Cache', {}).get('reclaimable', 0))}, "
+          f"images reclaimable {human(df.get('Images', {}).get('reclaimable', 0))} "
+          f"({len(unused)} images no container uses) -> projctl cleanup")
+
+
+def cmd_park(a):
+    projects, st, parked = load()
+    p = a.project
+    if p not in projects:
+        sys.exit(f"unknown project {p}; known: {', '.join(projects)}")
+    c = projects[p]
+    if c.get("kind") == "infra" and not a.force:
+        sys.exit(f"{p} is infrastructure; use --force if you really mean it")
+    if p in parked:
+        sys.exit(f"{p} is already parked (since {time.ctime(parked[p]['ts'])})")
+    rec = {"ts": time.time(), "unit": c.get("unit"), "unit_enabled": False, "timers": {}}
+    print(f"Parking {p}:")
+    if c.get("unit"):
+        rec["unit_enabled"] = sh("systemctl", "is-enabled", c["unit"]) == "enabled"
+        ok = run(["systemctl", "disable", "--now", c["unit"]], a.yes)
+    else:
+        ok = True
+    for t in c.get("timers", []):
+        rec["timers"][t] = sh("systemctl", "is-enabled", t) == "enabled"
+        run(["systemctl", "disable", "--now", t], a.yes)
+    # make sure every container of the compose project is down even if the unit's ExecStop didn't do it
+    if Path(c["dir"], "docker-compose.yml").exists() or Path(c["dir"], "compose.yml").exists():
+        run(["docker", "compose", "stop"], a.yes, cwd=c["dir"])
+    if a.yes and ok:
+        parked[p] = rec
+        PARKED.write_text(json.dumps(parked, indent=1))
+        print(f"parked. Bring it back with: projctl unpark {p} -y")
+    elif not a.yes:
+        print("dry-run: add -y to do it")
+
+
+def cmd_unpark(a):
+    projects, st, parked = load()
+    p = a.project
+    if p not in parked:
+        sys.exit(f"{p} is not parked")
+    rec, c = parked[p], projects.get(p, {})
+    print(f"Unparking {p}:")
+    if rec.get("unit"):
+        run(["systemctl", "enable" if rec.get("unit_enabled") else "start", *(["--now"] if rec.get("unit_enabled") else []),
+             rec["unit"]], a.yes)
+    elif c.get("dir"):
+        run(["docker", "compose", "start"], a.yes, cwd=c["dir"])
+    for t, en in rec.get("timers", {}).items():
+        if en:
+            run(["systemctl", "enable", "--now", t], a.yes)
+    if a.yes:
+        parked.pop(p)
+        PARKED.write_text(json.dumps(parked, indent=1))
+        print("unparked")
+    else:
+        print("dry-run: add -y to do it")
+
+
+def cmd_cleanup(a):
+    _, st, _ = load()
+    imgs = st.get("slow", {}).get("images", [])
+    unused = sorted({i["id"]: i for i in imgs if not i["in_use"]}.values(), key=lambda i: -i["size"])
+    keep = set(a.keep or [])
+    print("Build cache:")
+    run(["docker", "builder", "prune", "-af"], a.yes)
+    print("Images no container uses (layers shared with used images are not freed):")
+    for i in unused:
+        refs = [x["ref"] for x in imgs if x["id"] == i["id"]]
+        if any(r.split(":")[0] in keep or r in keep for r in refs):
+            print(f"  keep {', '.join(refs)}")
+            continue
+        print(f"  {human(i['size']):>7}  {', '.join(refs)}  (project {i['project']}, built {ago(i['created'])} ago)")
+        run(["docker", "image", "rm", *refs], a.yes)
+    if not a.yes:
+        print("dry-run: add -y to do it; --keep <repo> to spare an image")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("ls").set_defaults(f=cmd_ls)
+    sub.add_parser("suggest").set_defaults(f=cmd_suggest)
+    for name, f in (("park", cmd_park), ("unpark", cmd_unpark)):
+        s = sub.add_parser(name)
+        s.add_argument("project")
+        s.add_argument("-y", "--yes", action="store_true")
+        s.add_argument("--force", action="store_true")
+        s.set_defaults(f=f)
+    s = sub.add_parser("cleanup")
+    s.add_argument("-y", "--yes", action="store_true")
+    s.add_argument("--keep", action="append", help="image repo to keep (repeatable)")
+    s.set_defaults(f=cmd_cleanup)
+    a = ap.parse_args()
+    a.f(a)
+
+
+if __name__ == "__main__":
+    main()
