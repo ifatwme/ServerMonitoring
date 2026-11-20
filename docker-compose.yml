@@ -136,7 +136,7 @@ services:
     ports: ["127.0.0.1:${GRAFANA_PORT:-3000}:3000"]
     networks: [monitor]
     depends_on: [prometheus]
-    mem_limit: 512m               # Grafana 13 idles at ~260 MB; rendering dashboards needs headroom
+    mem_limit: 640m               # Grafana 13 idles at ~260 MB, ~450 MB (incl. page cache) while rendering
     cpus: 1.0
     pids_limit: 200
     healthcheck:
