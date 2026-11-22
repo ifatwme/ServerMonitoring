@@ -81,11 +81,11 @@ def test_ensure_topics_creates_only_missing_and_announces():
 
 
 def test_alertmanager_routing_and_template():
-    yml, tmpl = tg.render_alertmanager(-1004485383011, {"web": 11, "api": 12}, "https://g.example/")
+    yml, tmpl = tg.render_alertmanager(-1001234567890, {"web": 11, "api": 12}, "https://g.example/")
     assert "message_thread_id: 11" in yml and "message_thread_id: 12" in yml
     assert yml.count("disable_notifications: true") == 3          # general-silent + 2 project-silent
     assert 'project="web"' in yml and "receiver: project-web-silent" in yml
-    assert "chat_id: -1004485383011" in yml and "bot_token_file: /etc/alertmanager/bot_token" in yml
+    assert "chat_id: -1001234567890" in yml and "bot_token_file: /etc/alertmanager/bot_token" in yml
     assert "SECRET" not in yml
     assert '| html' in tmpl and "https://g.example/d/sm-project?var-project=" in tmpl
     _, plain = tg.render_alertmanager(-1, {}, "")
