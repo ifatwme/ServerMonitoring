@@ -1,0 +1,11 @@
+[Unit]
+Description=Renew the TLS certificate for server-monitor (Grafana)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/server-monitor
+ExecStart=/opt/server-monitor/scripts/renew_cert.sh
+TimeoutStartSec=10min

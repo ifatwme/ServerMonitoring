@@ -1,0 +1,13 @@
+[Unit]
+Description=Check/renew the server-monitor (Grafana) certificate twice a day
+
+[Timer]
+# 90-day ZeroSSL certificate, renewed by lego when due; twice a day leaves many retries before expiry.
+# Offset from the other sites' renewals (they share host port 80 via a lock anyway).
+OnCalendar=*-*-* 03:53:00 UTC
+OnCalendar=*-*-* 15:53:00 UTC
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

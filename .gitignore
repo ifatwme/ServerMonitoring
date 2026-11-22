@@ -3,3 +3,5 @@
 /data/
 *.tmp
 __pycache__/
+/deploy/tls/
+/deploy/certs/
