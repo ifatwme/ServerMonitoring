@@ -220,7 +220,9 @@ def cmd_cleanup(a):
             print(f"  keep {', '.join(refs)}  (used by a compose file or --keep)")
             continue
         print(f"  {human(i['size']):>7}  {', '.join(refs)}  (project {i['project']}, built {ago(i['created'])} ago)")
-        run(["docker", "image", "rm", *refs], a.yes)
+        # untagged images ("repo:<none>") can only be removed by id
+        named = [r for r in refs if not r.endswith(":<none>")]
+        run(["docker", "image", "rm", *(named if len(named) == len(refs) else [i["id"]])], a.yes)
     if not a.yes:
         print("dry-run: add -y to do it; --keep <repo> to spare an image")
 
