@@ -107,6 +107,10 @@ cs-paper-radar  (mean 0.142 cores)
 Dashboards are generated from code (`grafana/build_dashboards.py`); CI fails if the committed JSON
 is stale.
 
+| Server overview | Project detail | Waste & recommendations |
+|---|---|---|
+| ![overview](docs/img/overview.png) | ![project](docs/img/project.png) | ![waste](docs/img/waste.png) |
+
 ## Documentation
 
 - [docs/research.md](docs/research.md): problem, prior art (R-Capriccio, VPA/KRR, Kepler, Sablier, …), contributions, limitations, references
