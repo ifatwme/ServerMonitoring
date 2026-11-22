@@ -4,7 +4,7 @@ After=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /opt/server-monitor/collector/collect.py
+ExecStart=@INSTALL_DIR@/bin/sm-collect
 Nice=10
 IOSchedulingClass=idle
 TimeoutStartSec=240

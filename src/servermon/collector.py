@@ -17,116 +17,39 @@ Metric families (all prefixed sm_):
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
-import subprocess
-import sys
 import time
-import tomllib
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-CONFIG = Path(os.environ.get("SM_CONFIG", ROOT / "config" / "projects.toml"))
-STATE_DIR = Path(os.environ.get("SM_STATE_DIR", "/var/lib/server-monitor"))
-TEXTFILE = STATE_DIR / "textfile" / "server_monitor.prom"
+from . import traffic
+from .common import (
+    PARKED_FILE,
+    STATE_DIR,
+    STATE_FILE,
+    TEXTFILE_DIR,
+    Out,
+    atomic_write,
+    iso_ts,
+    load_config,
+    load_json,
+    parse_size,
+    sh,
+)
+
+TEXTFILE = TEXTFILE_DIR / "server_monitor.prom"
 TARGETS = STATE_DIR / "targets" / "blackbox.json"
-STATE_FILE = STATE_DIR / "state.json"
-PARKED_FILE = STATE_DIR / "parked.json"
 
 SLOW_EVERY = 600        # disk / git / image scans
 HOURLY_EVERY = 3600     # apt
-BUCKET = 3600           # traffic buckets: 1 h, kept 8 days
-KEEP_BUCKETS = 8 * 24
+BUCKET = traffic.BUCKET
 NOW = time.time()
-
-# ── helpers ──────────────────────────────────────────────────────────────────
-
-def sh(*cmd: str, timeout: int = 60, check: bool = False) -> str:
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return ""
-    if check and r.returncode != 0:
-        return ""
-    return r.stdout
-
-
-def esc(v) -> str:
-    return str(v).replace("\\", "\\\\").replace("\n", " ").replace('"', '\\"')
-
-
-class Out:
-    """Collects samples and renders Prometheus text format with HELP/TYPE once per family."""
-
-    def __init__(self):
-        self.fam: dict[str, tuple[str, str, list[str]]] = {}
-
-    def add(self, name: str, value, labels: dict | None = None, help_: str = "", typ: str = "gauge"):
-        if value is None:
-            return
-        f = self.fam.setdefault(name, (help_, typ, []))
-        lab = ",".join(f'{k}="{esc(v)}"' for k, v in (labels or {}).items())
-        f[2].append(f"{name}{{{lab}}} {float(value)!r}" if lab else f"{name} {float(value)!r}")
-
-    def render(self) -> str:
-        lines = []
-        for name, (h, t, samples) in self.fam.items():
-            lines += [f"# HELP {name} {h or name}", f"# TYPE {name} {t}", *samples]
-        return "\n".join(lines) + "\n"
-
-
-def atomic_write(path: Path, text: str):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text)
-    os.chmod(tmp, 0o644)
-    tmp.replace(path)
-
-
-def iso_ts(s: str | None) -> float | None:
-    if not s or s.startswith("0001-"):
-        return None
-    s = re.sub(r"(\.\d{6})\d*", r"\1", s.replace("Z", "+00:00"))
-    try:
-        return datetime.fromisoformat(s).timestamp()
-    except ValueError:
-        return None
-
-
-def parse_size(s: str) -> float:
-    m = re.match(r"([\d.]+)\s*([kKMGT]?i?B)", s or "")
-    if not m:
-        return 0.0
-    mult = {"B": 1, "kB": 1e3, "KB": 1e3, "MB": 1e6, "GB": 1e9, "TB": 1e12,
-            "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
-    return float(m.group(1)) * mult.get(m.group(2), 1)
 
 
 # ── config / state ───────────────────────────────────────────────────────────
-
-def load_config():
-    cfg = tomllib.loads(CONFIG.read_text())
-    settings = cfg.get("settings", {})
-    projects = cfg.get("projects", {})
-    for name, p in projects.items():
-        p.setdefault("kind", "app")
-        p.setdefault("dev_dirs", [])
-        p.setdefault("timers", [])
-        p.setdefault("images", [])
-        p.setdefault("idle_days", settings.get("idle_days", 7))
-        p.setdefault("keep_running", p["kind"] == "infra")
-    return settings, projects
-
-
-def load_json(path: Path, default):
-    try:
-        return json.loads(path.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return default
-
 
 # ── containers ───────────────────────────────────────────────────────────────
 
@@ -212,136 +135,23 @@ def container_activity(state, projects, cons):
 
 # ── traffic (nginx access logs) ──────────────────────────────────────────────
 
-LOG_RE = re.compile(r'^(\S+) \S+ \S+ \[[^\]]+\] "([^"]*)" (\d{3}) (\d+|-) "[^"]*" "([^"]*)"')
-AI_BOT = re.compile(r"GPTBot|ChatGPT|OAI-SearchBot|ClaudeBot|Claude-|anthropic|PerplexityBot|Bytespider|"
-                    r"meta-externalagent|Amazonbot|CCBot|Google-Extended|Applebot|cohere|Diffbot|"
-                    r"YouBot|Timpibot|ImagesiftBot|PetalBot|DuckAssistBot", re.I)
-BOT = re.compile(r"bot|crawl|spider|slurp|fetch|python|curl|wget|go-http|httpx|scrapy|axios|node|java/|"
-                 r"headless|libwww|okhttp|facebookexternalhit|preview|monitor|zgrab|masscan|nmap|scan|"
-                 r"censys|expanse|^-?$", re.I)
-SCAN_PATH = re.compile(r"\.(php|asp|aspx|jsp|cgi|env|git|svn|bak|sql|ini|yml|yaml|xml)(\?|$|/)|/wp-|/\.|"
-                       r"phpmyadmin|/admin|/cgi-bin|/boaform|/HNAP|/redcap|/vendor/|/actuator|/solr|"
-                       r"/owa/|/remote/|/geoserver|/console", re.I)
-PROBE = re.compile(r"server-monitor|Blackbox|kube-probe", re.I)
-ASSET = re.compile(r"\.(js|css|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|map|mp4|webm|json|txt)(\?|$)", re.I)
-CLASSES = ("human", "ai_bot", "bot", "scanner", "probe")
-AGENT_NAME = re.compile(r"([A-Za-z][\w.-]*(?:bot|Bot|crawler|spider|agent|Agent))", re.I)
-
-
-def classify(ip: str, req: str, status: int, ua: str) -> str:
-    parts = req.split()
-    method = parts[0] if parts else ""
-    path = parts[1] if len(parts) > 1 else req
-    if PROBE.search(ua) or path.startswith("/healthz") or ip.startswith("127.") and "curl" in ua.lower():
-        return "probe"
-    if AI_BOT.search(ua):
-        return "ai_bot"
-    if method not in ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS") or SCAN_PATH.search(path) \
-            or len(parts) < 2:
-        return "scanner"
-    if BOT.search(ua):
-        return "bot"
-    return "human"
-
-
-def agent_label(ua: str, cls: str) -> str:
-    if cls == "human":
-        return "browser"
-    m = AGENT_NAME.search(ua) or re.match(r"([\w.-]+)/", ua)
-    return (m.group(1) if m else (ua[:24] or "empty"))[:40]
-
-
 def collect_traffic(out: Out, state, projects):
     tr = state.setdefault("traffic", {})
     for proj, cfg in projects.items():
         cname = cfg.get("web_container")
         if not cname:
             continue
-        ps = tr.setdefault(proj, {"counters": {}, "bytes": {}, "last": {}, "buckets": {}, "ips": {},
-                                  "agents": {}, "cursor": {}})
+        ps = tr.setdefault(proj, traffic.new_state())
+        ps.setdefault("seen", {})
         cid = sh("docker", "inspect", "-f", "{{.Id}}", cname, check=True).strip()
         if cid:
             cur = ps["cursor"].get(cid)
-            first = cur is None
             since = str(int(cur)) if cur else str(int(NOW - 8 * 86400))
             raw = sh("docker", "logs", "--timestamps", "--since", since, cname, timeout=60)
-            max_ts = cur or 0
-            for line in raw.splitlines():
-                ts_s, _, rest = line.partition(" ")
-                ts = iso_ts(ts_s)
-                if ts is None or (cur and ts <= cur):
-                    continue
-                max_ts = max(max_ts, ts)
-                m = LOG_RE.match(rest)
-                if not m:
-                    continue
-                ip, req, status, size, ua = m.groups()
-                status = int(status)
-                cls = classify(ip, req, status, ua)
-                code = f"{status // 100}xx"
-                b = str(int(ts // BUCKET * BUCKET))
-                bk = ps["buckets"].setdefault(b, {})
-                bk[cls] = bk.get(cls, 0) + 1
-                path = req.split()[1] if len(req.split()) > 1 else ""
-                if cls == "human" and status < 400:
-                    # "engaged" visitor = same IP fetched a page AND its assets within 10 min (real
-                    # browsers do, scanners with a browser user agent usually don't)
-                    kind = "asset" if ASSET.search(path) or path.startswith("/_stcore") else "page"
-                    if kind == "page":
-                        bk["pageview"] = bk.get("pageview", 0) + 1
-                    seen = ps.setdefault("seen", {}).setdefault(ip, {})
-                    seen[kind] = ts
-                    other = seen.get("asset" if kind == "page" else "page", 0)
-                    if other and abs(ts - other) < 600:
-                        ps["ips"].setdefault("engaged", {})[ip] = ts
-                        ps["last"]["engaged"] = max(ps["last"].get("engaged", 0), ts)
-                ps["last"][cls] = max(ps["last"].get(cls, 0), ts)
-                ps["ips"].setdefault(cls, {})[ip] = max(ps["ips"].get(cls, {}).get(ip, 0), ts)
-                ag = ps["agents"].setdefault(b, {})
-                an = f"{cls}|{agent_label(ua, cls)}"
-                ag[an] = ag.get(an, 0) + 1
-                if not first:  # counters only count lines seen live (no spike from the backfill)
-                    k = f"{cls}|{code}"
-                    ps["counters"][k] = ps["counters"].get(k, 0) + 1
-                    ps["bytes"][cls] = ps["bytes"].get(cls, 0) + (int(size) if size.isdigit() else 0)
-            ps["cursor"] = {cid: max_ts or NOW}
-        # prune windows
-        cutoff = NOW - KEEP_BUCKETS * BUCKET
-        ps["buckets"] = {k: v for k, v in ps["buckets"].items() if float(k) >= cutoff}
-        ps["agents"] = {k: v for k, v in ps["agents"].items() if float(k) >= NOW - 2 * 86400}
-        ps["seen"] = {ip: v for ip, v in ps.get("seen", {}).items() if max(v.values()) >= NOW - 3600}
-        for cls in list(ps["ips"]):
-            ps["ips"][cls] = {ip: t for ip, t in ps["ips"][cls].items() if t >= NOW - 7 * 86400}
-
-        L = {"project": proj}
-        for k, v in ps["counters"].items():
-            cls, code = k.split("|")
-            out.add("sm_http_requests_total", v, {**L, "class": cls, "code": code},
-                    "Requests seen in the nginx access log since the collector started", "counter")
-        for cls, v in ps["bytes"].items():
-            out.add("sm_http_response_bytes_total", v, {**L, "class": cls}, "Response bytes by client class", "counter")
-        for cls, t in ps["last"].items():
-            out.add("sm_http_last_request_timestamp_seconds", t, {**L, "class": cls}, "Time of the last request per client class")
-        for window, secs in (("1h", 3600), ("24h", 86400), ("7d", 7 * 86400)):
-            tot = Counter()
-            for b, d in ps["buckets"].items():
-                if float(b) + BUCKET > NOW - secs:
-                    tot.update(d)
-            for cls in (*CLASSES, "pageview"):
-                out.add("sm_http_requests_window", tot.get(cls, 0), {**L, "class": cls, "window": window},
-                        "Requests in the trailing window (hour buckets); class=pageview = human non-asset 2xx/3xx")
-            for cls in (*CLASSES, "engaged"):
-                n = sum(1 for t in ps["ips"].get(cls, {}).values() if t >= NOW - secs)
-                out.add("sm_http_unique_clients_window", n, {**L, "class": cls, "window": window},
-                        "Distinct client IPs in the trailing window; class=engaged = browser that loaded a page and its assets")
-        agents = Counter()
-        for b, d in ps["agents"].items():
-            if float(b) + BUCKET > NOW - 86400:
-                agents.update(d)
-        for an, n in agents.most_common(12):
-            cls, name = an.split("|", 1)
-            out.add("sm_http_agent_requests_24h", n, {**L, "class": cls, "agent": name},
-                    "Top user agents (last 24 h) per project")
+            newest = traffic.ingest(ps, raw.splitlines(), after=cur, live=cur is not None)
+            ps["cursor"] = {cid: newest or NOW}
+        traffic.prune(ps, NOW)
+        traffic.export(out, proj, ps, NOW)
 
 
 # ── activity (git, files, images) ────────────────────────────────────────────
@@ -376,10 +186,8 @@ def repo_activity(d: str) -> tuple[float, float]:
     for f in files[:5000]:
         if not f:
             continue
-        try:
+        with contextlib.suppress(OSError):
             edit = max(edit, os.lstat(os.path.join(d, f)).st_mtime)
-        except OSError:
-            pass
     return commit, edit
 
 
@@ -510,7 +318,11 @@ def collect_host(out: Out, state):
 
 # ── main ─────────────────────────────────────────────────────────────────────
 
-def main():
+def main(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--full", action="store_true", help="run the slow disk/git/image scan now")
+    args = ap.parse_args(argv)
     t0 = time.time()
     settings, projects = load_config()
     state = load_json(STATE_FILE, {})
@@ -521,7 +333,7 @@ def main():
     per_project = collect_containers(out, projects, cons)
     starts = container_activity(state, projects, cons)
     collect_traffic(out, state, projects)
-    if NOW - state.get("slow", {}).get("ts", 0) > SLOW_EVERY or "--full" in sys.argv:
+    if NOW - state.get("slow", {}).get("ts", 0) > SLOW_EVERY or args.full:
         collect_slow(state, projects, cons)
     collect_units(out, projects)
     collect_host(out, state)

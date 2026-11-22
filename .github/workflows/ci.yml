@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: tests (python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install pytest==8.4.2 ruff==0.14.5
+      - name: lint
+        run: ruff check src tests experiments bin grafana
+      - name: unit tests
+        run: python -m pytest -q
+      - name: dashboards are generated from code and committed
+        run: python grafana/build_dashboards.py && git diff --exit-code grafana/dashboards
+      - name: attribution benchmark (synthetic, reproducible)
+        run: python experiments/semi_synthetic.py --synthetic | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: projctl / sm-* entry points start
+        run: |
+          bin/projctl --help >/dev/null
+          bin/sm-analyze --help >/dev/null
+          bin/sm-burst --help >/dev/null
+          bin/sm-collect --help >/dev/null
+
+  prometheus:
+    name: prometheus config + rule unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: promtool check config
+        run: |
+          docker run --rm --entrypoint promtool -v "$PWD:/w" -w /w prom/prometheus:v3.16.0 \
+            check config prometheus/prometheus.yml
+      - name: promtool test rules
+        run: |
+          docker run --rm --entrypoint promtool -v "$PWD:/w" -w /w prom/prometheus:v3.16.0 \
+            test rules tests/rules/server_test.yml
+      - name: shellcheck
+        run: docker run --rm -v "$PWD:/w" -w /w koalaman/shellcheck:stable scripts/*.sh
+
+  stack:
+    name: compose smoke test (prometheus + grafana + blackbox)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: configure
+        run: |
+          cp .env.example .env
+          sed -i "s/^GF_ADMIN_PASSWORD=.*/GF_ADMIN_PASSWORD=ci-$(openssl rand -hex 8)/" .env
+          echo "SM_STATE_DIR=$PWD/.state" >> .env
+          mkdir -p .state/targets .state/textfile
+          echo '[]' > .state/targets/blackbox.json
+          docker compose config -q
+      - name: start
+        run: docker compose up -d prometheus grafana blackbox
+      - name: wait for health, check rules and provisioned dashboards
+        run: |
+          for i in $(seq 60); do
+            curl -fs localhost:9090/-/ready >/dev/null && curl -fs localhost:3000/api/health >/dev/null && break
+            sleep 2
+          done
+          curl -fs localhost:9090/api/v1/rules | python3 -c '
+          import json, sys
+          groups = json.load(sys.stdin)["data"]["groups"]
+          bad = [r["name"] for g in groups for r in g["rules"] if r["health"] == "err"]
+          n = sum(len(g["rules"]) for g in groups)
+          print(n, "rules loaded"); assert n > 20 and not bad, bad'
+          PW=$(grep ^GF_ADMIN_PASSWORD= .env | cut -d= -f2)
+          curl -fs -u "admin:$PW" "localhost:3000/api/search?type=dash-db" | python3 -c '
+          import json, sys
+          uids = sorted(d["uid"] for d in json.load(sys.stdin))
+          print(uids); assert uids == ["sm-insights", "sm-overview", "sm-project", "sm-waste"], uids'
+      - name: logs on failure
+        if: failure()
+        run: docker compose logs --tail 80

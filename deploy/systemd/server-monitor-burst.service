@@ -1,0 +1,9 @@
+[Unit]
+Description=server-monitor burst sampler (1 Hz cgroup CPU + per-second requests, 2 minutes)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@INSTALL_DIR@/bin/sm-burst --duration 120
+Nice=5
+TimeoutStartSec=300

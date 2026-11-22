@@ -1,0 +1,59 @@
+# promtool test rules tests/rules/server_test.yml
+rule_files: [../../prometheus/rules/server.yml]
+evaluation_interval: 30s
+
+tests:
+  - name: site down alerts unless the project is parked
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="uptime",project="a"}'
+        values: '1 1 0 0 0 0 0 0'
+      - series: 'sm_project_parked{project="a"}'
+        values: '0x7'
+      - series: 'probe_success{job="uptime",project="b"}'
+        values: '0x7'
+      - series: 'sm_project_parked{project="b"}'
+        values: '1x7'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SiteDown
+        exp_alerts: []                       # down for 1 min only: still pending
+      - eval_time: 7m
+        alertname: SiteDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: uptime, project: a }
+            exp_annotations: { summary: "a public URL is down" }
+
+  - name: per-project CPU recording rule sums services and labels orphans "other"
+    interval: 1m
+    input_series:
+      - series: 'container_cpu_usage_seconds_total{name="p-app-1",project="p",service="app"}'
+        values: '0+30x10'                    # 0.5 cores
+      - series: 'container_cpu_usage_seconds_total{name="p-web-1",project="p",service="web"}'
+        values: '0+15x10'                    # 0.25 cores
+      - series: 'container_cpu_usage_seconds_total{name="adhoc"}'
+        values: '0+60x10'                    # 1 core, no compose labels
+    promql_expr_test:
+      - expr: project:cpu_cores:rate2m
+        eval_time: 8m
+        exp_samples:
+          - labels: 'project:cpu_cores:rate2m{project="p"}'
+            value: 0.75
+          - labels: 'project:cpu_cores:rate2m{project="other"}'
+            value: 1
+
+  - name: idle projects raise an info alert after an hour
+    interval: 1m
+    input_series:
+      - series: 'sm_project_park_candidate{project="old"}'
+        values: '1x90'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: ProjectIdle
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: ProjectIdle
+        exp_alerts:
+          - exp_labels: { severity: info, project: old }
+            exp_annotations:
+              summary: "old has had no visitors, commits, builds or tests for its idle threshold — consider `projctl park old`"

@@ -168,10 +168,10 @@ def overview():
                thresholds((None, "green"), (1, "red")), decimals=0), 3, 4)
 
     b.add(ts("CPU by project (cores)", [tgt("project:cpu_cores:rate2m", "{{project}}")], "short", stack=True,
-             desc="Stacked; 4 cores total. 'other' = containers without a compose project."), 12, 9)
+             desc="Stacked, in cores. 'other' = containers without a compose project."), 12, 9)
     b.add(ts("Memory by project (working set)", [
         tgt("project:memory_working_set_bytes", "{{project}}"),
-    ], "bytes", stack=True, desc="Working set = what the kernel can't simply drop. Host total RAM ≈ 7.6 GB."), 12, 9)
+    ], "bytes", stack=True, desc="Working set = what the kernel can't simply drop (compare with the host RAM gauge)."), 12, 9)
     b.add(ts("Host memory", [
         tgt("node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes", "used", "A"),
         tgt("node_memory_Cached_bytes + node_memory_Buffers_bytes", "page cache", "B"),
@@ -190,7 +190,8 @@ def overview():
     ], "Bps"), 8, 8)
 
     b.row("Projects")
-    M = lambda e: f"max by (project) ({e})"
+    def M(e):
+        return f"max by (project) ({e})"
     b.add(table("Projects at a glance", [
         ("A", M('probe_success{job="uptime"}')),
         ("B", M("project:probe_success:avg7d")),
@@ -429,8 +430,120 @@ def waste():
     return b
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# 4. Insights: CPU attribution + right-sizing (servermon.analyze / servermon.burst)
+# ═════════════════════════════════════════════════════════════════════════════
+
+COMP_COLORS = {"baseline": "#8e8e8e", "human": "green", "ai_bot": "red", "bot": "orange", "scanner": "purple"}
+
+
+def insights():
+    var = [{"name": "method", "label": "Attribution model", "type": "custom", "query": "burst,5m",
+            "current": {"text": "burst", "value": "burst"},
+            "options": [{"text": "burst", "value": "burst", "selected": True}, {"text": "5m", "value": "5m", "selected": False}]}]
+    b = Board("sm-insights", "Insights: who uses the CPU, what the limits should be",
+              "Regression-based CPU attribution to traffic classes and PSI/OOM-aware right-sizing.",
+              ["server-monitor"], var, refresh="5m", time_from="now-7d")
+    b.row("CPU attribution: what each project's CPU is actually spent on")
+    color_over = [{"matcher": {"id": "byName", "options": k},
+                   "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": v}}]} for k, v in COMP_COLORS.items()]
+    b.add({"type": "barchart", "title": "CPU share by cause (regression)",
+           "description": "baseline = CPU burned regardless of traffic (workers, demo loops, idle models). Other bars = CPU "
+                          "explained by each traffic class. method=burst uses 1 Hz samples (identifies steady crawlers); "
+                          "method=5m uses Prometheus history.",
+           "targets": [tgt('sm_attribution_share{method="$method"}', ref="A", instant=True, table=True)],
+           "transformations": [{"id": "groupingToMatrix", "options": {"rowField": "project", "columnField": "component",
+                                                                       "valueField": "Value", "emptyValue": "zero"}}],
+           "fieldConfig": {"defaults": {"unit": "percentunit", "max": 1, "custom": {"fillOpacity": 85, "lineWidth": 0}},
+                           "overrides": color_over},
+           "options": {"orientation": "horizontal", "stacking": "normal", "showValue": "never", "barWidth": 0.7,
+                       "legend": {"displayMode": "list", "placement": "bottom", "showLegend": True},
+                       "tooltip": {"mode": "multi"}}}, 12, 9)
+    b.add({"type": "barchart", "title": "...what request-share allocation would claim",
+           "description": "Share of requests per class. Most crawler-cost reports allocate CPU like this; it ignores background "
+                          "load and assumes every request costs the same.",
+           "targets": [tgt("sm_attribution_naive_share", ref="A", instant=True, table=True)],
+           "transformations": [{"id": "groupingToMatrix", "options": {"rowField": "project", "columnField": "component",
+                                                                       "valueField": "Value", "emptyValue": "zero"}}],
+           "fieldConfig": {"defaults": {"unit": "percentunit", "max": 1, "custom": {"fillOpacity": 85, "lineWidth": 0}},
+                           "overrides": color_over},
+           "options": {"orientation": "horizontal", "stacking": "normal", "showValue": "never", "barWidth": 0.7,
+                       "legend": {"displayMode": "list", "placement": "bottom", "showLegend": True},
+                       "tooltip": {"mode": "multi"}}}, 12, 9)
+    b.add(table("Attribution detail", [
+        ("A", 'max by (project, component) (sm_attribution_share{method="$method"})'),
+        ("B", 'max by (project, component) (sm_attribution_share_ci_low{method="$method"})'),
+        ("C", 'max by (project, component) (sm_attribution_share_ci_high{method="$method"})'),
+        ("D", 'max by (project, component) (sm_attribution_cores{method="$method"})'),
+    ], {"project": "Project", "component": "Cause", "Value #A": "CPU share", "Value #B": "90% CI low",
+        "Value #C": "90% CI high", "Value #D": "Cores"},
+        [col("Project", width=125), col("Cause", width=75),
+         col("CPU share", "percentunit", decimals=1, cell="gauge", th=thresholds((None, "blue")), width=150),
+         col("90% CI low", "percentunit", decimals=0, width=85), col("90% CI high", "percentunit", decimals=0, width=85),
+         col("Cores", decimals=3, width=65)], sort=("Cores", True),
+        desc="Shares with moving-block / per-burst bootstrap intervals."), 10, 10)
+    b.add(table("Model quality", [
+        ("A", 'max by (project, method) (sm_attribution_r2)'),
+        ("B", 'max by (project, method) (sm_attribution_samples)'),
+        ("C", 'max by (project, method, confidence) (sm_attribution_confident)'),
+    ], {"project": "Project", "method": "Model", "confidence": "Confidence", "Value #A": "R²", "Value #B": "Samples"},
+        [col("Project", width=130), col("Model", width=60), col("R²", decimals=2, width=55), col("Samples", decimals=0, width=75),
+         col("Confidence", mappings=[{"type": "value", "options": {
+             "ok": {"color": "green"}, "confounded": {"color": "orange", "text": "confounded (steady traffic)"},
+             "low": {"color": "orange"}, "insufficient-data": {"color": "text", "text": "collecting data"}}}],
+             cell="color-text")],
+        hide=["Value #C"], desc="confounded = the 5-min model cannot separate a steady traffic class from the baseline "
+                                "(see max hidden share); use the burst model."), 8, 10)
+    b.add(table("Cost per request", [("A", 'max by (project, class) (sm_attribution_cpu_ms_per_request{method="$method"})')],
+                {"project": "Project", "class": "Class", "Value": "CPU ms / request"},
+                [col("Project", width=120), col("Class", width=60),
+                 col("CPU ms / request", decimals=1, th=thresholds((None, "text"), (50, "orange"), (200, "red")),
+                     cell="color-text")], sort=("CPU ms / request", True),
+                desc="Marginal CPU per request; only classes whose share interval excludes zero."), 6, 10)
+    b.add(bargauge("5-min model: share a class could be hiding in the baseline", "sm_attribution_max_hidden_share",
+                   "percentunit", "{{project}} · {{class}}", max_=1,
+                   th=thresholds((None, "green"), (0.1, "orange"), (0.25, "red")),
+                   desc="Identifiability check: estimate + 2 standard errors. Red next to a ~0 estimate = steady traffic "
+                        "that only 1 Hz burst sampling can separate."), 24, 7)
+
+    b.row("Right-sizing: memory limits from decayed peaks, OOM events and PSI")
+    b.add(stat("Memory limits / host RAM (now)", 'sm_memory_limit_overcommit_ratio{limits="current"}', "x",
+               thresholds((None, "green"), (1, "orange"), (1.5, "red")), decimals=2,
+               desc="Sum of container memory limits / host RAM. > 1: the limits cannot all be honoured, so they do not "
+                    "protect the host from OOM."), 6, 5)
+    b.add(stat("... with the recommended limits", 'sm_memory_limit_overcommit_ratio{limits="recommended"}', "x",
+               thresholds((None, "green"), (1, "orange"), (1.5, "red")), decimals=2), 6, 5)
+    b.add(stat("Limit budget released by shrinking",
+               'sum(sm_rightsize_memory_limit_bytes - on (container) group_left sm_rightsize_memory_recommended_bytes '
+               'and on (container) sm_rightsize_decision{decision="shrink"})', "bytes"), 6, 5)
+    b.add(stat("Containers to grow (OOM / near limit)", 'count(sm_rightsize_decision{decision="grow"}) or vector(0)',
+               th=thresholds((None, "green"), (1, "red")), decimals=0), 6, 5)
+    b.add(table("Recommendations  →  `projctl rightsize --write DIR` writes compose overrides", [
+        ("A", 'max by (project, container, decision) (sm_rightsize_decision)'),
+        ("B", 'max by (project, container) (sm_rightsize_memory_limit_bytes)'),
+        ("C", 'max by (project, container) (sm_rightsize_memory_peak_24h_bytes)'),
+        ("D", 'max by (project, container) (sm_rightsize_memory_target_bytes)'),
+        ("E", 'max by (project, container) (sm_rightsize_memory_recommended_bytes)'),
+        ("F", 'max by (project, container) (sm_rightsize_memory_psi_share)'),
+        ("G", 'max by (project, container) (sm_rightsize_cpu_throttled_share)'),
+        ("H", 'max by (project, container) (sm_rightsize_history_days)'),
+    ], {"container": "Container", "project": "Project", "decision": "Decision", "Value #B": "Limit", "Value #C": "Peak 24h",
+        "Value #D": "P98 (decayed)", "Value #E": "Recommended", "Value #F": "Mem stall", "Value #G": "CPU throttled",
+        "Value #H": "History"},
+        [col("Container", width=260),
+         col("Decision", mappings=[{"type": "value", "options": {
+             "shrink": {"color": "blue"}, "grow": {"color": "red"}, "ok": {"color": "green"},
+             "set-limit": {"color": "orange"}, "insufficient-data": {"color": "text"}}}], cell="color-text"),
+         col("Limit", "bytes"), col("Peak 24h", "bytes"), col("P98 (decayed)", "bytes"), col("Recommended", "bytes"),
+         col("Mem stall", "percentunit", decimals=1, th=thresholds((None, "text"), (0.005, "orange")), cell="color-text"),
+         col("CPU throttled", "percentunit", decimals=0, th=thresholds((None, "text"), (0.1, "orange")), cell="color-text"),
+         col("History", "d", decimals=1)],
+        hide=["Value #A"], sort=("Limit", True)), 24, 12)
+    return b
+
+
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
-    for name, fn in (("overview", overview), ("project", project), ("waste", waste)):
+    for name, fn in (("overview", overview), ("project", project), ("waste", waste), ("insights", insights)):
         (OUT / f"{name}.json").write_text(json.dumps(fn().json(), indent=1))
         print("wrote", OUT / f"{name}.json")

@@ -53,7 +53,7 @@ services:
       - --path.udev.data=/host/run/udev/data
       - --web.listen-address=${MONITOR_GATEWAY:-172.30.250.1}:9100
       - --collector.systemd
-      - --collector.systemd.unit-include=(docker|containerd|ssh|cron|chrony|unattended-upgrades|aitrends.*|cs-paper-radar.*|emotrack.*|vector-search.*|deutsch-practice-hub.*|site-mirror.*|server-edge.*|server-monitor.*)\.(service|timer)
+      - --collector.systemd.unit-include=${SYSTEMD_UNIT_INCLUDE:-(docker|containerd|ssh|cron|chrony|server-monitor.*)\.(service|timer)}
       - --collector.textfile.directory=/textfile
       - --collector.processes
       - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+|var/lib/containerd/.+|snap/.+)($|/)

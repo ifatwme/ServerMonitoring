@@ -1,0 +1,10 @@
+[Unit]
+Description=server-monitor analyzer (CPU attribution + right-sizing from Prometheus history)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@INSTALL_DIR@/bin/sm-analyze --lookback 7d
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=300

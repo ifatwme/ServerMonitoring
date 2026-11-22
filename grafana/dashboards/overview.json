@@ -541,7 +541,7 @@
   {
    "type": "timeseries",
    "title": "CPU by project (cores)",
-   "description": "Stacked; 4 cores total. 'other' = containers without a compose project.",
+   "description": "Stacked, in cores. 'other' = containers without a compose project.",
    "targets": [
     {
      "expr": "project:cpu_cores:rate2m",
@@ -599,7 +599,7 @@
   {
    "type": "timeseries",
    "title": "Memory by project (working set)",
-   "description": "Working set = what the kernel can't simply drop. Host total RAM \u2248 7.6 GB.",
+   "description": "Working set = what the kernel can't simply drop (compare with the host RAM gauge).",
    "targets": [
     {
      "expr": "project:memory_working_set_bytes",

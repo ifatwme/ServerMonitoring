@@ -1,0 +1,12 @@
+[Unit]
+Description=Sample a 2-minute burst for CPU attribution at a randomised phase (~4 per hour)
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=11min
+# random phase: bursts must not lock onto cron-like jobs (aliasing)
+RandomizedDelaySec=4min
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
