@@ -16,6 +16,7 @@
 #   images         image name prefixes owned by this project (for disk accounting)
 #   idle_days      per-project override
 #   keep_running   true = never suggest parking
+#   topic          Telegram forum topic name for this project's alerts (sm-telegram setup creates it)
 
 [settings]
 idle_days = 7
@@ -24,6 +25,7 @@ keep_images = ["goacme/lego"]
 
 [projects.example-app]
 kind = "app"
+topic = "Example App"
 dir = "/srv/example-app"
 dev_dirs = ["/srv/example-app-dev"]
 unit = "example-app.service"

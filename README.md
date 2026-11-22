@@ -111,6 +111,11 @@ is stale.
 |---|---|---|
 | ![overview](docs/img/overview.png) | ![project](docs/img/project.png) | ![waste](docs/img/waste.png) |
 
+## Telegram
+
+Alerts go to one forum topic per project (General for host-wide alerts), and a status report is
+posted to General every 5 hours; `info` alerts arrive silently. See [docs/telegram.md](docs/telegram.md).
+
 ## Documentation
 
 - [docs/research.md](docs/research.md): problem, prior art (R-Capriccio, VPA/KRR, Kepler, Sablier, …), contributions, limitations, references

@@ -13,6 +13,6 @@ done
 ln -sf "$DIR/bin/projctl" /usr/local/bin/projctl
 systemctl daemon-reload
 systemctl enable --now server-monitor.service server-monitor-collect.timer server-monitor-analyze.timer \
-  server-monitor-burst.timer
+  server-monitor-burst.timer server-monitor-report.timer
 if [[ "${1:-}" == --public ]]; then systemctl enable --now server-monitor-cert-renew.timer; fi
 systemctl list-timers 'server-monitor*' --no-pager

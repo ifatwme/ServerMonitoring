@@ -3,6 +3,7 @@
 #   node-exporter  host metrics + systemd units + the collector's textfile (sm_* metrics)
 #   cadvisor       per-container CPU / memory / network / disk I/O / PSI, grouped by compose project
 #   blackbox       uptime + TLS expiry of each project's public URL (targets written by the collector)
+#   alertmanager   routes alerts to Telegram: one forum topic per project, General for the host
 #   prometheus     storage (retention capped by time AND size), recording + alert rules
 #   grafana        dashboards, bound to localhost only (open it through an SSH tunnel)
 #
@@ -109,6 +110,28 @@ services:
     mem_limit: 64m
     cpus: 0.25
 
+  alertmanager:
+    <<: *hardening
+    image: prom/alertmanager:v0.35.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --cluster.listen-address=          # single instance, no gossip port
+    read_only: true
+    volumes:
+      # rendered by `sm-telegram render|setup` (bin/sm-telegram); null receiver until Telegram is configured
+      - ${SM_STATE_DIR:-/var/lib/server-monitor}/alertmanager:/etc/alertmanager:ro
+      - alertmanager-data:/alertmanager
+    networks: [monitor]
+    mem_limit: 64m
+    cpus: 0.25
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9093/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   grafana:
     <<: *hardening
     image: grafana/grafana:13.2.6
@@ -155,3 +178,4 @@ networks:
 volumes:
   prometheus-data:
   grafana-data:
+  alertmanager-data:

@@ -1,0 +1,10 @@
+[Unit]
+Description=Post a server status report to Telegram every 5 hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=5h
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
